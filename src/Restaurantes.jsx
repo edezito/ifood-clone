@@ -1,514 +1,355 @@
-// src/Restaurantes.jsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from './supabaseClient'; 
 
 function Restaurantes({ onLogout }) {
   const [restaurantes, setRestaurantes] = useState([]);
   const [produtos, setProdutos] = useState([]);
   const [mensagem, setMensagem] = useState('');
 
+  // Estados dos formulários
   const [nomeRest, setNomeRest] = useState('');
   const [cnpj, setCnpj] = useState('');
   const [endereco, setEndereco] = useState('');
-
+  
   const [nomeProd, setNomeProd] = useState('');
   const [preco, setPreco] = useState('');
   const [restauranteSelecionado, setRestauranteSelecionado] = useState('');
 
-  const handleCadastrarRestaurante = (e) => {
-    e.preventDefault();
-    if (restaurantes.find(r => r.cnpj === cnpj)) {
-      setMensagem('Erro: CNPJ já cadastrado no sistema!');
-      return;
+  // Estados de Edição (Guardam o ID do que está sendo editado)
+  const [editandoRestId, setEditandoRestId] = useState(null);
+  const [editandoProdId, setEditandoProdId] = useState(null);
+
+  // ==========================================
+  // 1. READ (Buscar do Banco)
+  // ==========================================
+  useEffect(() => {
+    fetchDados();
+  }, []);
+
+  const fetchDados = async () => {
+    const { data: rests } = await supabase.from('restaurantes').select('*');
+    if (rests) setRestaurantes(rests);
+
+    const { data: prods } = await supabase.from('produtos').select('*');
+    if (prods) setProdutos(prods);
+  };
+
+  // ==========================================
+  // FUNÇÃO DE GEOLOCALIZAÇÃO (OpenStreetMap)
+  // ==========================================
+  const obterCoordenadas = async (enderecoDigitado) => {
+    try {
+      // Faz a requisição para a API pública do Nominatim
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(enderecoDigitado)}`);
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        // Retorna o primeiro resultado encontrado
+        return {
+          lat: parseFloat(data[0].lat).toFixed(6),
+          lng: parseFloat(data[0].lon).toFixed(6)
+        };
+      } else {
+        return null; // Endereço não encontrado
+      }
+    } catch (error) {
+      console.error("Erro ao buscar coordenadas:", error);
+      return null;
     }
-    const novoRestaurante = { 
-      id: Date.now().toString(), 
-      nome: nomeRest, 
-      cnpj, 
-      endereco, 
-      lat: (Math.random() * -10).toFixed(4), 
-      lng: (Math.random() * -50).toFixed(4) 
-    };
-    setRestaurantes([...restaurantes, novoRestaurante]);
-    setMensagem(`Loja "${nomeRest}" cadastrada com sucesso!`);
+  };
+
+  // ==========================================
+  // 2. CREATE & UPDATE (Restaurante)
+  // ==========================================
+  const handleSalvarRestaurante = async (e) => {
+    e.preventDefault();
+    setMensagem('📍 Buscando coordenadas no mapa...');
+
+    // Busca as coordenadas reais antes de salvar no banco
+    const coordenadas = await obterCoordenadas(endereco);
+    
+    if (!coordenadas) {
+      return setMensagem('⚠️ Erro: Endereço não encontrado no mapa. Tente ser mais específico (Ex: Avenida Paulista, 1578, São Paulo).');
+    }
+    
+    if (editandoRestId) {
+      // UPDATE (Atualizar)
+      const { data, error } = await supabase
+        .from('restaurantes')
+        .update({ 
+          nome: nomeRest, 
+          cnpj, 
+          endereco,
+          latitude: coordenadas.lat,
+          longitude: coordenadas.lng
+        })
+        .eq('id', editandoRestId)
+        .select();
+
+      if (error) return setMensagem(`Erro ao atualizar: ${error.message}`);
+      
+      setRestaurantes(restaurantes.map(r => r.id === editandoRestId ? data[0] : r));
+      setMensagem(`Loja "${nomeRest}" atualizada com sucesso!`);
+      setEditandoRestId(null);
+    } else {
+      // CREATE (Inserir Novo)
+      const { data, error } = await supabase
+        .from('restaurantes')
+        .insert([{ 
+          nome: nomeRest, 
+          cnpj, 
+          endereco, 
+          latitude: coordenadas.lat, 
+          longitude: coordenadas.lng 
+        }])
+        .select();
+
+      if (error) {
+        if (error.code === '23505' || error.message.includes('restaurantes_cnpj_key')) {
+          setMensagem('⚠️ Erro: Este CNPJ já está cadastrado no sistema!');
+        } else {
+          setMensagem(`Erro ao cadastrar: ${error.message}`);
+        }
+        return;
+      }
+
+      setRestaurantes([...restaurantes, data[0]]);
+      setMensagem(`Loja "${nomeRest}" cadastrada com sucesso (Lat: ${coordenadas.lat}, Lng: ${coordenadas.lng}) ✅`);
+    }
+
+    // Limpa formulário
     setNomeRest(''); setCnpj(''); setEndereco('');
   };
 
-  const handleCadastrarProduto = (e) => {
+  // ==========================================
+  // 3. CREATE & UPDATE (Produto)
+  // ==========================================
+  const handleSalvarProduto = async (e) => {
     e.preventDefault();
-    if (!restauranteSelecionado) {
-      setMensagem('Erro: Selecione uma loja!');
-      return;
+    if (!restauranteSelecionado) return setMensagem('Erro: Selecione uma loja!');
+
+    if (editandoProdId) {
+      // UPDATE (Atualizar)
+      const { data, error } = await supabase
+        .from('produtos')
+        .update({ nome: nomeProd, preco: parseFloat(preco), restaurante_id: restauranteSelecionado })
+        .eq('id', editandoProdId)
+        .select();
+
+      if (error) return setMensagem(`Erro ao atualizar produto: ${error.message}`);
+
+      setProdutos(produtos.map(p => p.id === editandoProdId ? data[0] : p));
+      setMensagem(`Produto "${nomeProd}" atualizado!`);
+      setEditandoProdId(null);
+    } else {
+      // CREATE (Inserir Novo)
+      const { data, error } = await supabase
+        .from('produtos')
+        .insert([{ nome: nomeProd, preco: parseFloat(preco), restaurante_id: restauranteSelecionado }])
+        .select();
+
+      if (error) return setMensagem(`Erro ao cadastrar produto: ${error.message}`);
+
+      setProdutos([...produtos, data[0]]);
+      setMensagem(`Produto "${nomeProd}" salvo no banco!`);
     }
-    const novoProduto = { 
-      id: Date.now().toString(), 
-      nome: nomeProd, 
-      preco: parseFloat(preco).toFixed(2), 
-      restauranteId: restauranteSelecionado 
-    };
-    setProdutos([...produtos, novoProduto]);
-    setMensagem(`Produto "${nomeProd}" adicionado ao catálogo!`);
+
     setNomeProd(''); setPreco('');
   };
 
+  // ==========================================
+  // 4. DELETE (Excluir) e PREPARAR EDIÇÃO
+  // ==========================================
+  const handleExcluirRestaurante = async (id, nome) => {
+    if(!window.confirm(`Tem certeza que deseja apagar a loja ${nome} e todos os seus produtos?`)) return;
+    
+    const { error } = await supabase.from('restaurantes').delete().eq('id', id);
+    if (error) return setMensagem(`Erro ao excluir: ${error.message}`);
+    
+    setRestaurantes(restaurantes.filter(r => r.id !== id));
+    setProdutos(produtos.filter(p => p.restaurante_id !== id)); // Remove produtos vinculados da tela
+    setMensagem(`Loja "${nome}" excluída com sucesso.`);
+  };
+
+  const handleExcluirProduto = async (id, nome) => {
+    if(!window.confirm(`Deseja remover o produto ${nome}?`)) return;
+    
+    const { error } = await supabase.from('produtos').delete().eq('id', id);
+    if (error) return setMensagem(`Erro ao excluir: ${error.message}`);
+    
+    setProdutos(produtos.filter(p => p.id !== id));
+    setMensagem(`Produto "${nome}" removido do cardápio.`);
+  };
+
+  const prepararEdicaoRestaurante = (rest) => {
+    setNomeRest(rest.nome); setCnpj(rest.cnpj); setEndereco(rest.endereco);
+    setEditandoRestId(rest.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' }); // Sobe a tela suavemente
+  };
+
+  const prepararEdicaoProduto = (prod) => {
+    setNomeProd(prod.nome); setPreco(prod.preco); setRestauranteSelecionado(prod.restaurante_id);
+    setEditandoProdId(prod.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // ==========================================
+  // INTERFACE (UI)
+  // ==========================================
   return (
     <>
       <style>{`
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
-
-        .dashboard-layout { 
-          min-height: 100vh; 
-          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-        }
-
-        .dashboard-header { 
-          position: sticky; 
-          top: 0; 
-          z-index: 50; 
-          background: linear-gradient(135deg, #dc2626, #b91c1c); 
-          padding: 1rem 5%; 
-          display: flex; 
-          justify-content: space-between; 
-          align-items: center; 
-          color: white; 
-          box-shadow: 0 4px 20px rgba(220, 38, 38, 0.3);
-          backdrop-filter: blur(10px);
-        }
-
-        .dashboard-main { 
-          width: 100%; 
-          padding: 2rem 5%; 
-          max-width: 2000px;
-          margin: 0 auto;
-        }
-
-        .dashboard-grid { 
-          display: grid; 
-          grid-template-columns: 1fr; 
-          gap: 2rem; 
-        }
-
-        @media (min-width: 1024px) {
-          .dashboard-grid { 
-            grid-template-columns: 400px 1fr; 
-            gap: 2.5rem; 
-          }
-        }
-
-        @media (min-width: 1600px) {
-          .dashboard-grid { 
-            grid-template-columns: 450px 1fr; 
-            gap: 3rem; 
-          }
-        }
-
-        .form-card { 
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(10px);
-          padding: 2rem; 
-          border-radius: 1.5rem; 
-          box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.5);
-          transition: transform 0.3s ease;
-        }
-
-        .form-card:hover {
-          transform: translateY(-2px);
-        }
-
-        .catalog-card { 
-          background: white;
-          padding: 2rem; 
-          border-radius: 1.5rem; 
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
-          border: 1px solid rgba(226, 232, 240, 0.8);
-        }
-
-        .restaurant-card {
-          background: linear-gradient(135deg, #ffffff, #fafafa);
-          border: 1px solid #e2e8f0;
-          border-radius: 1.25rem;
-          overflow: hidden;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .restaurant-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 20px 40px -15px rgba(220, 38, 38, 0.2);
-          border-color: #dc2626;
-        }
-
-        .product-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 0.75rem 1rem;
-          border-bottom: 1px solid #e2e8f0;
-          transition: background 0.2s;
-          border-radius: 0.5rem;
-        }
-
-        .product-item:hover {
-          background: #f8fafc;
-        }
-
-        .empty-state {
-          text-align: center;
-          padding: 4rem 2rem;
-          background: #f8fafc;
-          border-radius: 1rem;
-          border: 2px dashed #e2e8f0;
-        }
+        .dashboard-layout { min-height: 100vh; background-color: #f1f5f9; font-family: 'Nunito', sans-serif; overflow-x: hidden; }
+        .dashboard-header { position: sticky; top: 0; z-index: 10; background: linear-gradient(135deg, #ea1d2c, #b31220); padding: 15px 4vw; display: flex; justify-content: space-between; align-items: center; color: white; box-shadow: 0 4px 20px rgba(234, 29, 44, 0.2); }
+        .dashboard-main { width: 100%; padding: 40px 4vw; box-sizing: border-box; }
+        .dashboard-grid { display: grid; grid-template-columns: 1fr; gap: 30px; margin-top: 20px; align-items: start; }
+        @media (min-width: 1024px) { .dashboard-grid { grid-template-columns: 400px 1fr; gap: 40px; } }
+        @media (min-width: 1600px) { .dashboard-grid { grid-template-columns: 450px 1fr; gap: 50px; } }
+        .card { background-color: white; padding: 30px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid #e2e8f0; }
+        .app-view-card { background-color: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; min-height: 600px; }
+        .action-btn { background: transparent; border: none; cursor: pointer; padding: 5px; border-radius: 6px; transition: 0.2s; }
+        .action-btn:hover { background: #f1f5f9; transform: scale(1.1); }
       `}</style>
 
       <div className="dashboard-layout">
+        
         <header className="dashboard-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <span style={{ fontSize: '2rem', filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.2))' }}>🍔</span>
-            <div>
-              <h1 style={{ fontSize: 'clamp(1.25rem, 3vw, 1.75rem)', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
-                FoodExpress 
-                <span style={{ fontWeight: '400', opacity: 0.8, marginLeft: '0.5rem' }}>Parceiros</span>
-              </h1>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '28px' }}>🏪</span>
+            <h1 style={{ fontSize: '22px', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>FoodExpress <span style={{fontWeight: '400', opacity: 0.8}}>| Parceiros</span></h1>
           </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-            <span style={{ 
-              fontSize: '0.875rem', 
-              fontWeight: '600', 
-              backgroundColor: 'rgba(255,255,255,0.15)', 
-              padding: '0.5rem 1.25rem', 
-              borderRadius: '2rem',
-              backdropFilter: 'blur(5px)',
-              border: '1px solid rgba(255,255,255,0.2)'
-            }}>
-              ADMIN
-            </span>
-            
-            <button 
-              onClick={onLogout} 
-              style={{ 
-                background: 'rgba(255,255,255,0.1)', 
-                border: '1px solid rgba(255,255,255,0.2)',
-                color: 'white', 
-                cursor: 'pointer', 
-                padding: '0.5rem 1.25rem',
-                borderRadius: '2rem',
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '0.75rem',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                transition: 'all 0.3s',
-                backdropFilter: 'blur(5px)'
-              }}
-              onMouseEnter={e => e.target.style.background = 'rgba(255,255,255,0.2)'}
-              onMouseLeave={e => e.target.style.background = 'rgba(255,255,255,0.1)'}
-            >
-              <span>🚪</span> Sair
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 'bold', backgroundColor: 'rgba(255,255,255,0.2)', padding: '6px 16px', borderRadius: '20px' }}>ADMINISTRADOR</span>
+            <button onClick={onLogout} style={{ background: 'transparent', border: 'none', color: 'white', cursor: 'pointer', fontSize: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              🚪 <span style={{fontSize: '14px', fontWeight: 'bold'}}>Sair</span>
             </button>
           </div>
         </header>
 
         <main className="dashboard-main">
+          
           {mensagem && (
-            <div style={{ 
-              padding: '1rem 1.5rem', 
-              borderRadius: '1rem', 
-              marginBottom: '2rem', 
-              fontWeight: '600', 
-              fontSize: '0.95rem', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.75rem',
-              animation: 'slideDown 0.3s ease',
-              ...(mensagem.startsWith('Erro') 
-                ? { 
-                    backgroundColor: '#fef2f2', 
-                    color: '#991b1b', 
-                    border: '1px solid #fecaca',
-                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.1)'
-                  } 
-                : { 
-                    backgroundColor: '#f0fdf4', 
-                    color: '#166534', 
-                    border: '1px solid #bbf7d0',
-                    boxShadow: '0 4px 12px rgba(34, 197, 94, 0.1)'
-                  })
-            }}>
-              <span style={{ fontSize: '1.25rem' }}>{mensagem.startsWith('Erro') ? '⚠️' : '✅'}</span>
-              {mensagem}
+            <div style={{ padding: '16px 20px', borderRadius: '12px', marginBottom: '25px', fontWeight: 'bold', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '10px', ...(mensagem.includes('Erro') || mensagem.includes('⚠️') ? { backgroundColor: '#fef2f2', color: '#991b1b', border: '1px solid #f87171' } : { backgroundColor: '#ecfdf5', color: '#065f46', border: '1px solid #34d399' }) }}>
+              {mensagem.includes('Erro') || mensagem.includes('⚠️') ? '⚠️' : '✅'} {mensagem}
             </div>
           )}
 
           <div className="dashboard-grid">
-            {/* Coluna Esquerda - Formulários */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              {/* Formulário de Loja */}
-              <div className="form-card">
-                <h3 style={{ 
-                  margin: '0 0 1.5rem 0', 
-                  fontSize: '1.5rem', 
-                  color: '#0f172a', 
-                  fontWeight: '700', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '0.75rem',
-                  borderBottom: '2px solid #f1f5f9',
-                  paddingBottom: '1rem'
-                }}>
-                  <span style={{ fontSize: '2rem' }}>🏪</span>
-                  Nova Loja
-                </h3>
-                
-                <form onSubmit={handleCadastrarRestaurante} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🏢</span>
-                    <input 
-                      style={{ ...inputStyle, paddingLeft: '3rem' }} 
-                      placeholder="Nome do Estabelecimento" 
-                      value={nomeRest} 
-                      onChange={e => setNomeRest(e.target.value)} 
-                      required 
-                    />
+            
+            {/* FORMULÁRIOS */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+              
+              <div className="card" style={editandoRestId ? {border: '2px solid #ea1d2c'} : {}}>
+                <h3 style={cardTitleStyle}>{editandoRestId ? '✏️ Editando Loja' : '🏠 Nova Loja'}</h3>
+                <form onSubmit={handleSalvarRestaurante} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <input style={inputStyle} placeholder="Nome do Estabelecimento" value={nomeRest} onChange={e => setNomeRest(e.target.value)} required />
+                  <input style={inputStyle} placeholder="CNPJ (Apenas números)" value={cnpj} onChange={e => setCnpj(e.target.value)} required />
+                  <input style={inputStyle} placeholder="Endereço Completo" value={endereco} onChange={e => setEndereco(e.target.value)} required />
+                  <div style={{display: 'flex', gap: '10px'}}>
+                    <button style={btnPrimaryStyle} type="submit">{editandoRestId ? 'Salvar Alterações' : 'Cadastrar Loja'}</button>
+                    {editandoRestId && (
+                      <button type="button" onClick={() => {setEditandoRestId(null); setNomeRest(''); setCnpj(''); setEndereco('');}} style={{...btnPrimaryStyle, background: '#64748b', flex: 0.4}}>Cancelar</button>
+                    )}
                   </div>
-                  
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>📋</span>
-                    <input 
-                      style={{ ...inputStyle, paddingLeft: '3rem' }} 
-                      placeholder="CNPJ (apenas números)" 
-                      value={cnpj} 
-                      onChange={e => setCnpj(e.target.value.replace(/\D/g, '').slice(0, 14))} 
-                      required 
-                    />
-                  </div>
-                  
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>📍</span>
-                    <input 
-                      style={{ ...inputStyle, paddingLeft: '3rem' }} 
-                      placeholder="Endereço Completo" 
-                      value={endereco} 
-                      onChange={e => setEndereco(e.target.value)} 
-                      required 
-                    />
-                  </div>
-                  
-                  <button 
-                    style={btnPrimaryStyle} 
-                    type="submit"
-                    onMouseEnter={e => e.target.style.background = '#1e293b'}
-                    onMouseLeave={e => e.target.style.background = '#0f172a'}
-                  >
-                    Cadastrar Loja
-                  </button>
                 </form>
               </div>
 
-              {/* Formulário de Produto */}
-              <div className="form-card">
-                <h3 style={{ 
-                  margin: '0 0 1.5rem 0', 
-                  fontSize: '1.5rem', 
-                  color: '#0f172a', 
-                  fontWeight: '700', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '0.75rem',
-                  borderBottom: '2px solid #f1f5f9',
-                  paddingBottom: '1rem'
-                }}>
-                  <span style={{ fontSize: '2rem' }}>🛍️</span>
-                  Novo Produto
-                </h3>
-                
-                <form onSubmit={handleCadastrarProduto} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>🏪</span>
-                    <select 
-                      style={{ ...inputStyle, paddingLeft: '3rem', appearance: 'none', cursor: 'pointer' }} 
-                      value={restauranteSelecionado} 
-                      onChange={e => setRestauranteSelecionado(e.target.value)} 
-                      required
-                    >
-                      <option value="">Selecione a Loja</option>
-                      {restaurantes.map(r => (
-                        <option key={r.id} value={r.id}>{r.nome}</option>
-                      ))}
-                    </select>
+              <div className="card" style={editandoProdId ? {border: '2px solid #ea1d2c'} : {}}>
+                <h3 style={cardTitleStyle}>{editandoProdId ? '✏️ Editando Produto' : '🛍️ Novo Produto'}</h3>
+                <form onSubmit={handleSalvarProduto} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <select style={inputStyle} value={restauranteSelecionado} onChange={e => setRestauranteSelecionado(e.target.value)} required>
+                    <option value="">Selecione a Loja</option>
+                    {restaurantes.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
+                  </select>
+                  <input style={inputStyle} placeholder="Nome do Produto (Ex: Pizza)" value={nomeProd} onChange={e => setNomeProd(e.target.value)} required />
+                  <input style={inputStyle} type="number" step="0.01" placeholder="Preço (R$)" value={preco} onChange={e => setPreco(e.target.value)} required />
+                  <div style={{display: 'flex', gap: '10px'}}>
+                    <button style={{...btnPrimaryStyle, background: '#ea1d2c'}} type="submit">{editandoProdId ? 'Salvar Produto' : 'Adicionar ao Cardápio'}</button>
+                    {editandoProdId && (
+                      <button type="button" onClick={() => {setEditandoProdId(null); setNomeProd(''); setPreco(''); setRestauranteSelecionado('');}} style={{...btnPrimaryStyle, background: '#64748b', flex: 0.4}}>Cancelar</button>
+                    )}
                   </div>
-                  
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>📦</span>
-                    <input 
-                      style={{ ...inputStyle, paddingLeft: '3rem' }} 
-                      placeholder="Nome do Produto" 
-                      value={nomeProd} 
-                      onChange={e => setNomeProd(e.target.value)} 
-                      required 
-                    />
-                  </div>
-                  
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }}>💰</span>
-                    <input 
-                      style={{ ...inputStyle, paddingLeft: '3rem' }} 
-                      type="number" 
-                      step="0.01" 
-                      min="0"
-                      placeholder="Preço (R$)" 
-                      value={preco} 
-                      onChange={e => setPreco(e.target.value)} 
-                      required 
-                    />
-                  </div>
-                  
-                  <button 
-                    style={{...btnPrimaryStyle, background: '#dc2626'}}
-                    type="submit"
-                    onMouseEnter={e => e.target.style.background = '#b91c1c'}
-                    onMouseLeave={e => e.target.style.background = '#dc2626'}
-                  >
-                    Adicionar ao Cardápio
-                  </button>
                 </form>
               </div>
             </div>
 
-            {/* Coluna Direita - Catálogo */}
-            <div className="catalog-card">
-              <div style={{ 
-                borderBottom: '2px solid #f1f5f9', 
-                paddingBottom: '1.5rem', 
-                marginBottom: '2rem' 
-              }}>
-                <h3 style={{ 
-                  margin: '0 0 0.5rem 0', 
-                  fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', 
-                  color: '#0f172a', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '1rem' 
-                }}>
-                  <span style={{ fontSize: '2rem' }}>📱</span>
-                  Catálogo do App
+            {/* LISTAGEM (O APP) */}
+            <div className="app-view-card">
+              <div style={{ borderBottom: '2px solid #f1f5f9', paddingBottom: '15px', marginBottom: '25px' }}>
+                <h3 style={{ margin: '0 0 5px 0', fontSize: '22px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  📱 Catálogo do App
                 </h3>
-                <p style={{ color: '#64748b', fontSize: '1rem', margin: 0 }}>
-                  Visualização em tempo real - {restaurantes.length} {restaurantes.length === 1 ? 'loja' : 'lojas'} cadastrada{restaurantes.length !== 1 && 's'}
-                </p>
+                <p style={{ color: '#64748b', fontSize: '15px', margin: 0 }}>Lendo diretamente do Supabase PostgreSQL.</p>
               </div>
               
               {restaurantes.length === 0 ? (
-                <div className="empty-state">
-                  <span style={{ fontSize: '5rem', opacity: 0.5, display: 'block', marginBottom: '1rem' }}>🍽️</span>
-                  <p style={{ fontSize: '1.25rem', fontWeight: '600', color: '#475569', marginBottom: '0.5rem' }}>
-                    O catálogo está vazio
-                  </p>
-                  <p style={{ fontSize: '0.95rem', color: '#94a3b8' }}>
-                    Cadastre uma loja ao lado para começar.
-                  </p>
+                <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
+                  <span style={{ fontSize: '50px', opacity: 0.3 }}>🍽️</span>
+                  <p style={{ marginTop: '15px', fontSize: '18px', fontWeight: '600' }}>O catálogo está vazio</p>
                 </div>
               ) : (
-                <div style={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 350px), 1fr))', 
-                  gap: '1.5rem' 
-                }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
                   {restaurantes.map(rest => (
-                    <div key={rest.id} className="restaurant-card">
-                      <div style={{ 
-                        background: 'linear-gradient(135deg, #dc2626, #b91c1c)', 
-                        padding: '1.25rem',
-                        color: 'white'
-                      }}>
-                        <h4 style={{ 
-                          margin: 0, 
-                          fontSize: '1.25rem', 
-                          fontWeight: '700',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.5rem'
-                        }}>
-                          <span>🏪</span> {rest.nome}
-                        </h4>
-                      </div>
+                    <div key={rest.id} style={{ border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden', background: '#f8fafc' }}>
                       
-                      <div style={{ padding: '1.25rem' }}>
-                        <div style={{ 
-                          background: '#f8fafc', 
-                          padding: '0.75rem', 
-                          borderRadius: '0.75rem',
-                          marginBottom: '1.25rem',
-                          fontSize: '0.875rem'
-                        }}>
-                          <p style={{ margin: '0.25rem 0', color: '#475569' }}>
-                            <strong>CNPJ:</strong> {rest.cnpj}
-                          </p>
-                          <p style={{ margin: '0.25rem 0', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <span>📍</span> {rest.endereco}
-                          </p>
-                        </div>
+                      {/* Cabecalho do Card (Loja) */}
+                      <div style={{ backgroundColor: '#fff', padding: '20px', borderBottom: '1px solid #e2e8f0' }}>
                         
-                        <div>
-                          <p style={{ 
-                            margin: '0 0 1rem 0', 
-                            fontSize: '0.875rem', 
-                            fontWeight: '700', 
-                            textTransform: 'uppercase', 
-                            color: '#64748b',
-                            letterSpacing: '0.5px'
-                          }}>
-                            Cardápio ({produtos.filter(p => p.restauranteId === rest.id).length})
-                          </p>
-                          
-                          {produtos.filter(p => p.restauranteId === rest.id).length === 0 ? (
-                            <p style={{ 
-                              fontSize: '0.875rem', 
-                              color: '#94a3b8', 
-                              fontStyle: 'italic', 
-                              margin: 0,
-                              padding: '0.75rem',
-                              background: '#f8fafc',
-                              borderRadius: '0.75rem',
-                              textAlign: 'center'
-                            }}>
-                              Nenhum produto cadastrado
-                            </p>
-                          ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                              {produtos
-                                .filter(p => p.restauranteId === rest.id)
-                                .sort((a, b) => a.nome.localeCompare(b.nome))
-                                .map(prod => (
-                                  <div key={prod.id} className="product-item">
-                                    <span style={{ color: '#334155', fontWeight: '500' }}>{prod.nome}</span>
-                                    <span style={{ 
-                                      fontWeight: '700', 
-                                      color: '#059669',
-                                      background: '#ecfdf5',
-                                      padding: '0.25rem 0.75rem',
-                                      borderRadius: '1rem',
-                                      fontSize: '0.875rem'
-                                    }}>
-                                      R$ {prod.preco}
-                                    </span>
-                                  </div>
-                              ))}
-                            </div>
-                          )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div>
+                            <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', color: '#0f172a', fontWeight: '800' }}>{rest.nome}</h4>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#64748b', fontWeight: '600' }}>CNPJ: {rest.cnpj}</p>
+                            <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: '#64748b' }}>📍 {rest.endereco}</p>
+                          </div>
+                          <div style={{ display: 'flex', gap: '5px' }}>
+                            <button className="action-btn" onClick={() => prepararEdicaoRestaurante(rest)} title="Editar Loja">✏️</button>
+                            <button className="action-btn" onClick={() => handleExcluirRestaurante(rest.id, rest.nome)} title="Excluir Loja">🗑️</button>
+                          </div>
                         </div>
+
+                        {/* MINI MAPA INTUITIVO */}
+                        {rest.latitude && rest.longitude && (
+                          <div style={{ marginTop: '15px', borderRadius: '10px', overflow: 'hidden', border: '1px solid #e2e8f0', height: '140px', backgroundColor: '#e2e8f0' }}>
+                            <iframe
+                              width="100%"
+                              height="100%"
+                              frameBorder="0"
+                              scrolling="no"
+                              src={`https://www.openstreetmap.org/export/embed.html?bbox=${parseFloat(rest.longitude) - 0.005},${parseFloat(rest.latitude) - 0.005},${parseFloat(rest.longitude) + 0.005},${parseFloat(rest.latitude) + 0.005}&layer=mapnik&marker=${rest.latitude},${rest.longitude}`}
+                              style={{ border: 'none' }}
+                            ></iframe>
+                          </div>
+                        )}
+
                       </div>
+
+                      {/* Corpo do Card (Produtos) */}
+                      <div style={{ padding: '20px' }}>
+                        <p style={{ margin: '0 0 15px 0', fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: '#94a3b8', letterSpacing: '1px' }}>Cardápio</p>
+                        {produtos.filter(p => p.restaurante_id === rest.id).length === 0 ? (
+                          <p style={{ fontSize: '14px', color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>Sem produtos.</p>
+                        ) : (
+                          produtos.filter(p => p.restaurante_id === rest.id).map(prod => (
+                            <div key={prod.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #e2e8f0', fontSize: '15px' }}>
+                              <div>
+                                <span style={{ color: '#334155', fontWeight: '500', display: 'block' }}>{prod.nome}</span>
+                                <span style={{ fontWeight: '800', color: '#10b981', fontSize: '14px' }}>R$ {prod.preco}</span>
+                              </div>
+                              <div style={{ display: 'flex', gap: '2px' }}>
+                                <button className="action-btn" onClick={() => prepararEdicaoProduto(prod)} title="Editar Produto">✏️</button>
+                                <button className="action-btn" onClick={() => handleExcluirProduto(prod.id, prod.nome)} title="Excluir Produto">🗑️</button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
                     </div>
                   ))}
                 </div>
               )}
             </div>
+
           </div>
         </main>
       </div>
@@ -516,32 +357,8 @@ function Restaurantes({ onLogout }) {
   );
 }
 
-const inputStyle = { 
-  height: '3.25rem', 
-  width: '100%',
-  padding: '0 1.25rem', 
-  borderRadius: '1rem', 
-  border: '2px solid #e2e8f0', 
-  fontSize: '1rem', 
-  backgroundColor: '#ffffff', 
-  outline: 'none', 
-  color: '#1e293b', 
-  transition: 'all 0.2s',
-  boxSizing: 'border-box'
-};
-
-const btnPrimaryStyle = { 
-  height: '3.25rem', 
-  borderRadius: '1rem', 
-  border: 'none', 
-  background: '#0f172a', 
-  color: 'white', 
-  fontSize: '1rem', 
-  fontWeight: '700', 
-  cursor: 'pointer', 
-  transition: 'all 0.3s',
-  width: '100%',
-  boxShadow: '0 4px 12px rgba(15, 23, 42, 0.2)'
-};
+const cardTitleStyle = { margin: '0 0 25px 0', fontSize: '20px', color: '#0f172a', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '2px solid #f1f5f9', paddingBottom: '15px' };
+const inputStyle = { height: '52px', padding: '0 18px', borderRadius: '12px', border: '1px solid #cbd5e0', fontSize: '15px', backgroundColor: '#f8fafc', outline: 'none', color: '#1e293b', transition: 'border 0.2s', width: '100%', boxSizing: 'border-box' };
+const btnPrimaryStyle = { flex: 1, height: '52px', borderRadius: '12px', border: 'none', background: '#0f172a', color: 'white', fontSize: '16px', fontWeight: '800', cursor: 'pointer', transition: '0.2s', marginTop: '10px' };
 
 export default Restaurantes;
