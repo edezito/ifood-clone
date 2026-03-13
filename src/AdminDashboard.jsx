@@ -1,13 +1,22 @@
-import { useState, useEffect } from 'react';
-import { supabase } from './supabaseClient'; 
+import React, { useState, useEffect } from 'react';
+import { supabase } from './supabaseClient';
+import {
+  Store, ShoppingBag, Package, MapPin, Edit2, Trash2,
+  CheckCircle, Clock, X, PlusCircle, AlertCircle, LogOut
+} from 'lucide-react';
 
 function AdminDashboard({ onLogout }) {
-  // ... (Estados e funções lógicas mantidas exatamente iguais ao seu código) ...
+  // Estados de Dados
   const [restaurantes, setRestaurantes] = useState([]);
   const [produtos, setProdutos] = useState([]);
   const [pedidos, setPedidos] = useState([]);
-  const [mensagem, setMensagem] = useState('');
 
+  // Estados de UI
+  const [mensagem, setMensagem] = useState('');
+  const [tipoMensagem, setTipoMensagem] = useState('info');
+  const [abaAtiva, setAbaAtiva] = useState('pedidos'); // pedidos, catalogo, gerenciar
+
+  // Estados de Formulário
   const [nomeRest, setNomeRest] = useState('');
   const [cnpj, setCnpj] = useState('');
   const [endereco, setEndereco] = useState('');
@@ -15,16 +24,36 @@ function AdminDashboard({ onLogout }) {
   const [preco, setPreco] = useState('');
   const [restauranteSelecionado, setRestauranteSelecionado] = useState('');
 
+  // Estados de Edição
   const [editandoRestId, setEditandoRestId] = useState(null);
   const [editandoProdId, setEditandoProdId] = useState(null);
 
-  useEffect(() => { fetchDados(); }, []);
+  useEffect(() => {
+    fetchDados();
+
+    // Opcional: Escutar novos pedidos em tempo real (Descomente se quiser)
+    /*
+    const channel = supabase.channel('pedidos_admin')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, payload => {
+        fetchDados();
+      }).subscribe();
+    return () => supabase.removeChannel(channel);
+    */
+  }, []);
+
+  const mostrarMensagem = (texto, tipo = 'info') => {
+    setMensagem(texto);
+    setTipoMensagem(tipo);
+    setTimeout(() => setMensagem(''), 5000);
+  };
 
   const fetchDados = async () => {
     const { data: rests } = await supabase.from('restaurantes').select('*');
     if (rests) setRestaurantes(rests);
+
     const { data: prods } = await supabase.from('produtos').select('*');
     if (prods) setProdutos(prods);
+
     const { data: peds } = await supabase.from('pedidos').select('*').order('id', { ascending: false });
     if (peds) setPedidos(peds);
   };
@@ -38,213 +67,379 @@ function AdminDashboard({ onLogout }) {
     } catch (error) { return null; }
   };
 
+  // --- FUNÇÕES DE RESTAURANTE ---
   const handleSalvarRestaurante = async (e) => {
     e.preventDefault();
-    setMensagem('📍 Buscando coordenadas...');
+    mostrarMensagem('Buscando coordenadas...', 'info');
+
     const coordenadas = await obterCoordenadas(endereco);
-    if (!coordenadas) return setMensagem('⚠️ Erro: Endereço não encontrado.');
-    
-    if (editandoRestId) {
-      const { data, error } = await supabase.from('restaurantes').update({ nome: nomeRest, cnpj, endereco, latitude: coordenadas.lat, longitude: coordenadas.lng }).eq('id', editandoRestId).select();
-      if (error) return setMensagem(`Erro: ${error.message}`);
-      setRestaurantes(restaurantes.map(r => r.id === editandoRestId ? data[0] : r));
-      setMensagem(`Loja atualizada com sucesso!`);
-      setEditandoRestId(null);
-    } else {
-      const { data, error } = await supabase.from('restaurantes').insert([{ nome: nomeRest, cnpj, endereco, latitude: coordenadas.lat, longitude: coordenadas.lng }]).select();
-      if (error) return setMensagem(error.code === '23505' ? '⚠️ CNPJ já cadastrado!' : `Erro: ${error.message}`);
-      setRestaurantes([...restaurantes, data[0]]);
-      setMensagem(`Loja cadastrada com sucesso ✅`);
-    }
-    setNomeRest(''); setCnpj(''); setEndereco('');
-  };
+    if (!coordenadas) return mostrarMensagem('Endereço não encontrado pelo GPS. Tente ser mais específico.', 'error');
 
-  const handleSalvarProduto = async (e) => {
-    e.preventDefault();
-    if (!restauranteSelecionado) return setMensagem('Selecione uma loja!');
-
-    if (editandoProdId) {
-      const { data, error } = await supabase.from('produtos').update({ nome: nomeProd, preco: parseFloat(preco), restaurante_id: restauranteSelecionado }).eq('id', editandoProdId).select();
-      if (error) return setMensagem(`Erro: ${error.message}`);
-      setProdutos(produtos.map(p => p.id === editandoProdId ? data[0] : p));
-      setMensagem(`Produto atualizado!`);
-      setEditandoProdId(null);
-    } else {
-      const { data, error } = await supabase.from('produtos').insert([{ nome: nomeProd, preco: parseFloat(preco), restaurante_id: restauranteSelecionado }]).select();
-      if (error) return setMensagem(`Erro: ${error.message}`);
-      setProdutos([...produtos, data[0]]);
-      setMensagem(`Produto salvo!`);
+    try {
+      if (editandoRestId) {
+        const { data, error } = await supabase
+          .from('restaurantes')
+          .update({ nome: nomeRest, cnpj, endereco, latitude: coordenadas.lat, longitude: coordenadas.lng })
+          .eq('id', editandoRestId)
+          .select();
+        if (error) throw error;
+        setRestaurantes(restaurantes.map(r => r.id === editandoRestId ? data[0] : r));
+        mostrarMensagem('Loja atualizada com sucesso!', 'success');
+      } else {
+        const { data, error } = await supabase
+          .from('restaurantes')
+          .insert([{ nome: nomeRest, cnpj, endereco, latitude: coordenadas.lat, longitude: coordenadas.lng }])
+          .select();
+        if (error) throw error;
+        setRestaurantes([...restaurantes, data[0]]);
+        mostrarMensagem('Loja cadastrada com sucesso!', 'success');
+      }
+      cancelarEdicaoRest();
+    } catch (error) {
+      mostrarMensagem(`Erro: ${error.message}`, 'error');
     }
-    setNomeProd(''); setPreco('');
   };
 
   const handleExcluirRestaurante = async (id, nome) => {
-    if(!window.confirm(`Apagar a loja ${nome} e seus produtos?`)) return;
-    await supabase.from('restaurantes').delete().eq('id', id);
-    setRestaurantes(restaurantes.filter(r => r.id !== id));
-    setProdutos(produtos.filter(p => p.restaurante_id !== id));
-    setMensagem(`Loja excluída.`);
+    if (!window.confirm(`ATENÇÃO: Deseja excluir "${nome}" e todos os produtos vinculados?`)) return;
+    try {
+      const { error } = await supabase.from('restaurantes').delete().eq('id', id);
+      if (error) throw error;
+      setRestaurantes(restaurantes.filter(r => r.id !== id));
+      setProdutos(produtos.filter(p => p.restaurante_id !== id));
+      mostrarMensagem('Loja excluída!', 'success');
+    } catch (error) {
+      mostrarMensagem(`Erro ao excluir: ${error.message}`, 'error');
+    }
+  };
+
+  const prepararEdicaoRestaurante = (rest) => {
+    setNomeRest(rest.nome); setCnpj(rest.cnpj); setEndereco(rest.endereco);
+    setEditandoRestId(rest.id);
+    setAbaAtiva('gerenciar');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelarEdicaoRest = () => {
+    setNomeRest(''); setCnpj(''); setEndereco(''); setEditandoRestId(null);
+  };
+
+  // --- FUNÇÕES DE PRODUTO ---
+  const handleSalvarProduto = async (e) => {
+    e.preventDefault();
+    if (!restauranteSelecionado) return mostrarMensagem('Selecione uma loja para vincular o produto.', 'error');
+
+    try {
+      if (editandoProdId) {
+        const { data, error } = await supabase
+          .from('produtos')
+          .update({ nome: nomeProd, preco: parseFloat(preco.replace(',', '.')), restaurante_id: restauranteSelecionado })
+          .eq('id', editandoProdId)
+          .select();
+        if (error) throw error;
+        setProdutos(produtos.map(p => p.id === editandoProdId ? data[0] : p));
+        mostrarMensagem('Produto atualizado!', 'success');
+      } else {
+        const { data, error } = await supabase
+          .from('produtos')
+          .insert([{ nome: nomeProd, preco: parseFloat(preco.replace(',', '.')), restaurante_id: restauranteSelecionado }])
+          .select();
+        if (error) throw error;
+        setProdutos([...produtos, data[0]]);
+        mostrarMensagem('Produto salvo!', 'success');
+      }
+      cancelarEdicaoProd();
+    } catch (error) {
+      mostrarMensagem(`Erro: ${error.message}`, 'error');
+    }
   };
 
   const handleExcluirProduto = async (id, nome) => {
-    if(!window.confirm(`Remover o produto ${nome}?`)) return;
-    await supabase.from('produtos').delete().eq('id', id);
-    setProdutos(produtos.filter(p => p.id !== id));
-    setMensagem(`Produto removido.`);
+    if (!window.confirm(`Remover o produto "${nome}"?`)) return;
+    try {
+      const { error } = await supabase.from('produtos').delete().eq('id', id);
+      if (error) throw error;
+      setProdutos(produtos.filter(p => p.id !== id));
+      mostrarMensagem('Produto removido!', 'success');
+    } catch (error) {
+      mostrarMensagem(`Erro ao remover: ${error.message}`, 'error');
+    }
   };
 
+  const prepararEdicaoProduto = (prod) => {
+    setNomeProd(prod.nome); setPreco(prod.preco.toString()); setRestauranteSelecionado(prod.restaurante_id);
+    setEditandoProdId(prod.id);
+    setAbaAtiva('gerenciar');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelarEdicaoProd = () => {
+    setNomeProd(''); setPreco(''); setRestauranteSelecionado(''); setEditandoProdId(null);
+  };
+
+  // --- FUNÇÕES DE PEDIDO ---
   const handleAtualizarStatus = async (pedidoId, novoStatus) => {
-    const { error } = await supabase.from('pedidos').update({ status: novoStatus }).eq('id', pedidoId);
-    if (error) return setMensagem(`Erro ao atualizar pedido: ${error.message}`);
-    setPedidos(pedidos.map(p => p.id === pedidoId ? { ...p, status: novoStatus } : p));
+    try {
+      const { error } = await supabase.from('pedidos').update({ status: novoStatus }).eq('id', pedidoId);
+      if (error) throw error;
+      setPedidos(pedidos.map(p => p.id === pedidoId ? { ...p, status: novoStatus } : p));
+      mostrarMensagem(`Pedido atualizado para: ${novoStatus}`, 'success');
+    } catch (error) {
+      mostrarMensagem(`Erro ao atualizar: ${error.message}`, 'error');
+    }
   };
 
-  const prepararEdicaoRestaurante = (rest) => { setNomeRest(rest.nome); setCnpj(rest.cnpj); setEndereco(rest.endereco); setEditandoRestId(rest.id); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  const prepararEdicaoProduto = (prod) => { setNomeProd(prod.nome); setPreco(prod.preco); setRestauranteSelecionado(prod.restaurante_id); setEditandoProdId(prod.id); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  const getStatusBadge = (status) => {
+    const styles = {
+      'Aguardando': 'bg-amber-100 text-amber-800 border-amber-200',
+      'Em Preparação': 'bg-blue-100 text-blue-800 border-blue-200', // Ajustado para bater com o ClienteApp
+      'Em Trânsito': 'bg-purple-100 text-purple-800 border-purple-200', // Ajustado para bater com o ClienteApp
+      'Entregue': 'bg-green-100 text-green-800 border-green-200',
+      'Cancelado': 'bg-red-100 text-red-800 border-red-200',
+    };
+    return styles[status] || 'bg-gray-100 text-gray-800 border-gray-200';
+  };
 
   return (
-    <>
-      {/* CSS Embutido para Responsividade e Design Profissional */}
-      <style>{`
-        .admin-layout { min-height: 100vh; background-color: #f8fafc; font-family: 'Nunito', sans-serif; }
-        .admin-header { background: linear-gradient(135deg, #ea1d2c, #b31220); padding: 20px 5vw; display: flex; justify-content: space-between; align-items: center; color: white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-        .admin-container { padding: 40px 5vw; max-width: 1400px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 30px; }
-        .col-esquerda { flex: 1 1 350px; display: flex; flex-direction: column; gap: 20px; }
-        .col-direita { flex: 2 1 600px; display: flex; flex-direction: column; gap: 30px; }
-        
-        .card { background: white; padding: 25px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
-        .card-title { margin: 0 0 20px 0; color: #0f172a; font-size: 1.25rem; display: flex; align-items: center; gap: 8px; }
-        
-        .form-group { display: flex; flex-direction: column; gap: 12px; }
-        .input-base { padding: 12px 15px; border-radius: 8px; border: 1px solid #cbd5e0; font-size: 1rem; transition: border-color 0.2s; width: 100%; box-sizing: border-box; }
-        .input-base:focus { outline: none; border-color: #ea1d2c; }
-        
-        .btn-primary { padding: 12px; background: #0f172a; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 1rem; transition: background 0.2s; }
-        .btn-primary:hover { background: #1e293b; }
-        
-        .msg-box { padding: 15px; background: #fff; border-radius: 8px; border-left: 4px solid #3b82f6; box-shadow: 0 2px 4px rgba(0,0,0,0.05); font-weight: 600; }
-        
-        .pedido-card { border-left: 5px solid #e2e8f0; padding: 20px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .pedido-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 10px; }
-        .badge { padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
-        .badge-aguardando { background: #dbeafe; color: #1e40af; }
-        .badge-preparando { background: #fef3c7; color: #b45309; }
-        .badge-saiu { background: #e0e7ff; color: #4338ca; }
-        .badge-concluido { background: #d1fae5; color: #065f46; }
-        
-        .btn-status { padding: 8px 16px; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: bold; transition: opacity 0.2s; }
-        .btn-status:hover { opacity: 0.9; }
-        
-        .item-list { border: 1px solid #e2e8f0; border-radius: 10px; padding: 15px; background: #f8fafc; margin-bottom: 15px; }
-        .btn-icon { background: white; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; padding: 6px 10px; margin-left: 5px; transition: 0.2s; }
-        .btn-icon:hover { background: #f1f5f9; }
-      `}</style>
+    <div className="min-h-screen bg-[#f8fafc] font-sans pb-20 lg:pb-0">
 
-      <div className="admin-layout">
-        <header className="admin-header">
-          <h1 style={{ fontSize: '1.5rem', margin: 0 }}>🏪 Painel do Lojista</h1>
-          <button onClick={onLogout} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', cursor: 'pointer', fontWeight: 'bold', padding: '8px 16px', borderRadius: '8px' }}>Sair</button>
-        </header>
+      {/* HEADER FIXO */}
+      <header className="bg-red-600 text-white shadow-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Store className="w-6 h-6" />
+            <h1 className="text-xl font-bold tracking-tight">Portal do Parceiro</h1>
+          </div>
+          <button onClick={onLogout} className="flex items-center gap-2 bg-red-700 hover:bg-red-800 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
+            <LogOut size={16} /> <span className="hidden sm:inline">Sair</span>
+          </button>
+        </div>
+      </header>
 
-        <main className="admin-container">
-          
-          {/* Lado Esquerdo: Formulários */}
-          <div className="col-esquerda">
-            {mensagem && <div className="msg-box">{mensagem}</div>}
-            
-            <div className="card">
-              <h3 className="card-title">{editandoRestId ? '✏️ Editar Loja' : '🏠 Nova Loja'}</h3>
-              <form onSubmit={handleSalvarRestaurante} className="form-group">
-                <input value={nomeRest} onChange={e => setNomeRest(e.target.value)} placeholder="Nome da Loja" required className="input-base" />
-                <input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="CNPJ" required className="input-base" />
-                <input value={endereco} onChange={e => setEndereco(e.target.value)} placeholder="Endereço Completo" required className="input-base" />
-                <button type="submit" className="btn-primary">{editandoRestId ? 'Salvar Alterações' : 'Cadastrar Loja'}</button>
+      {/* MENSAGEM TOAST LATERAL */}
+      {mensagem && (
+        <div className="fixed top-20 right-4 z-50 animate-bounce-subtle">
+          <div className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg font-bold text-sm text-white ${tipoMensagem === 'success' ? 'bg-green-500' : tipoMensagem === 'error' ? 'bg-red-500' : 'bg-blue-500'
+            }`}>
+            {tipoMensagem === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+            {mensagem}
+          </div>
+        </div>
+      )}
+
+      {/* NAVEGAÇÃO DE ABAS (Mobile e Desktop) */}
+      <div className="bg-white border-b sticky top-[60px] z-40">
+        <div className="max-w-7xl mx-auto px-4 flex gap-6 overflow-x-auto scrollbar-hide">
+          {[
+            { id: 'pedidos', label: 'Pedidos Ativos', icon: Package },
+            { id: 'catalogo', label: 'Meu Catálogo', icon: ShoppingBag },
+            { id: 'gerenciar', label: 'Gerenciar Lojas', icon: Store }
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = abaAtiva === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setAbaAtiva(tab.id)}
+                className={`flex items-center gap-2 py-4 border-b-2 font-bold whitespace-nowrap transition-colors ${isActive ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-800'
+                  }`}
+              >
+                <Icon size={18} /> {tab.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+          {/* COLUNA ESQUERDA: FORMULÁRIOS (Sempre visível no Desktop, ou se Aba Gerenciar no Mobile) */}
+          <div className={`lg:col-span-4 space-y-6 ${abaAtiva === 'gerenciar' ? 'block' : 'hidden lg:block'}`}>
+
+            {/* FORMULÁRIO DE LOJA */}
+            <div className={`bg-white rounded-2xl p-6 border shadow-sm ${editandoRestId ? 'border-amber-400 ring-4 ring-amber-50' : 'border-gray-100'}`}>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                  <Store size={20} className={editandoRestId ? 'text-amber-500' : 'text-gray-400'} />
+                  {editandoRestId ? 'Editando Loja' : 'Nova Loja'}
+                </h2>
+                {editandoRestId && (
+                  <button onClick={cancelarEdicaoRest} className="p-1 hover:bg-gray-100 rounded-full text-gray-500"><X size={18} /></button>
+                )}
+              </div>
+
+              <form onSubmit={handleSalvarRestaurante} className="space-y-3">
+                <input type="text" value={nomeRest} onChange={(e) => setNomeRest(e.target.value)} placeholder="Nome da Loja" required
+                  className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all" />
+                <input type="text" value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="CNPJ (Ex: 00.000.000/0000-00)" required
+                  className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all" />
+                <div className="relative">
+                  <MapPin size={18} className="absolute left-3 top-3.5 text-gray-400" />
+                  <input type="text" value={endereco} onChange={(e) => setEndereco(e.target.value)} placeholder="Endereço Completo com Número" required
+                    className="w-full bg-gray-50 pl-10 pr-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all" />
+                </div>
+                <button type="submit" className={`w-full text-white font-bold py-3 rounded-xl transition-all active:scale-95 ${editandoRestId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-900 hover:bg-black'}`}>
+                  {editandoRestId ? 'Atualizar Loja' : 'Salvar Loja'}
+                </button>
               </form>
             </div>
 
-            <div className="card">
-              <h3 className="card-title">{editandoProdId ? '✏️ Editar Produto' : '🛍️ Novo Produto'}</h3>
-              <form onSubmit={handleSalvarProduto} className="form-group">
-                <select value={restauranteSelecionado} onChange={e => setRestauranteSelecionado(e.target.value)} required className="input-base">
-                  <option value="">Selecione a Loja</option>
+            {/* FORMULÁRIO DE PRODUTO */}
+            <div className={`bg-white rounded-2xl p-6 border shadow-sm ${editandoProdId ? 'border-amber-400 ring-4 ring-amber-50' : 'border-gray-100'}`}>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                  <Package size={20} className={editandoProdId ? 'text-amber-500' : 'text-gray-400'} />
+                  {editandoProdId ? 'Editando Produto' : 'Novo Produto'}
+                </h2>
+                {editandoProdId && (
+                  <button onClick={cancelarEdicaoProd} className="p-1 hover:bg-gray-100 rounded-full text-gray-500"><X size={18} /></button>
+                )}
+              </div>
+
+              <form onSubmit={handleSalvarProduto} className="space-y-3">
+                <select value={restauranteSelecionado} onChange={(e) => setRestauranteSelecionado(e.target.value)} required
+                  className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all text-gray-700">
+                  <option value="">Vincular à Loja...</option>
                   {restaurantes.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
                 </select>
-                <input value={nomeProd} onChange={e => setNomeProd(e.target.value)} placeholder="Nome do Produto" required className="input-base" />
-                <input value={preco} onChange={e => setPreco(e.target.value)} placeholder="Preço (Ex: 29.90)" type="number" step="0.01" required className="input-base" />
-                <button type="submit" className="btn-primary">{editandoProdId ? 'Salvar Alterações' : 'Adicionar Produto'}</button>
+                <input type="text" value={nomeProd} onChange={(e) => setNomeProd(e.target.value)} placeholder="Ex: Hambúrguer Duplo" required
+                  className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all" />
+                <div className="relative">
+                  <span className="absolute left-4 top-3.5 text-gray-500 font-bold">R$</span>
+                  <input type="number" step="0.01" value={preco} onChange={(e) => setPreco(e.target.value)} placeholder="0.00" required
+                    className="w-full bg-gray-50 pl-11 pr-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all" />
+                </div>
+                <button type="submit" className={`w-full text-white font-bold py-3 rounded-xl transition-all active:scale-95 ${editandoProdId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-900 hover:bg-black'}`}>
+                  {editandoProdId ? 'Atualizar Produto' : 'Adicionar Produto'}
+                </button>
               </form>
             </div>
           </div>
 
-          {/* Lado Direito: Listas e Pedidos */}
-          <div className="col-direita">
-            
-            <div className="card">
-              <h2 className="card-title" style={{ color: '#ea1d2c' }}>🔔 Gestão de Pedidos</h2>
-              {pedidos.length === 0 ? <p style={{ color: '#64748b' }}>Nenhum pedido recebido ainda.</p> : (
-                <div>
-                  {pedidos.map(ped => {
-                    const loja = restaurantes.find(r => r.id === ped.restaurante_id);
-                    let badgeClass = 'badge-aguardando';
-                    let borderCol = '#3b82f6';
-                    if(ped.status === 'Preparando') { badgeClass = 'badge-preparando'; borderCol = '#f59e0b'; }
-                    if(ped.status === 'Saiu para Entrega') { badgeClass = 'badge-saiu'; borderCol = '#6366f1'; }
-                    if(ped.status === 'Concluído') { badgeClass = 'badge-concluido'; borderCol = '#10b981'; }
+          {/* COLUNA DIREITA: CONTEÚDO (Pedidos ou Catálogo) */}
+          <div className="lg:col-span-8">
 
-                    return (
-                      <div key={ped.id} className="pedido-card" style={{ borderLeftColor: borderCol }}>
-                        <div className="pedido-header">
-                          <strong style={{ fontSize: '1.1rem' }}>{ped.cliente_nome}</strong>
-                          <span className={`badge ${badgeClass}`}>{ped.status}</span>
-                        </div>
-                        <div style={{ color: '#475569', fontSize: '0.95rem', lineHeight: '1.6' }}>
-                          <p style={{ margin: 0 }}><strong>Loja:</strong> {loja ? loja.nome : 'Desconhecida'}</p>
-                          <p style={{ margin: 0 }}><strong>Entrega:</strong> 🛵 {ped.tipo_entrega} | <strong>Pagamento:</strong> 💳 {ped.forma_pagamento}</p>
-                          <p style={{ margin: '5px 0 0 0', fontSize: '1.1rem', color: '#0f172a' }}><strong>Total: R$ {ped.total.toFixed(2)}</strong></p>
-                        </div>
-                        
-                        <div style={{ marginTop: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                          {ped.status === 'Aguardando' && <button onClick={() => handleAtualizarStatus(ped.id, 'Preparando')} className="btn-status" style={{ background: '#3b82f6' }}>Aceitar e Preparar</button>}
-                          {ped.status === 'Preparando' && <button onClick={() => handleAtualizarStatus(ped.id, 'Saiu para Entrega')} className="btn-status" style={{ background: '#f59e0b' }}>Despachar Pedido</button>}
-                          {ped.status === 'Saiu para Entrega' && <button onClick={() => handleAtualizarStatus(ped.id, 'Concluído')} className="btn-status" style={{ background: '#10b981' }}>Marcar como Entregue</button>}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="card">
-              <h2 className="card-title">📦 Seu Catálogo (Lojas e Produtos)</h2>
-              <div>
-                {restaurantes.map(rest => (
-                  <div key={rest.id} className="item-list">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #e2e8f0', paddingBottom: '12px', marginBottom: '12px' }}>
-                      <strong style={{ fontSize: '1.1rem', color: '#0f172a' }}>{rest.nome}</strong>
-                      <div>
-                        <button onClick={() => prepararEdicaoRestaurante(rest)} className="btn-icon" title="Editar Loja">✏️</button>
-                        <button onClick={() => handleExcluirRestaurante(rest.id, rest.nome)} className="btn-icon" title="Excluir Loja">🗑️</button>
-                      </div>
-                    </div>
-                    {produtos.filter(p => p.restaurante_id === rest.id).map(prod => (
-                      <div key={prod.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
-                        <span style={{ color: '#334155' }}>{prod.nome} <strong style={{ color: '#10b981', marginLeft: '8px' }}>R$ {prod.preco}</strong></span>
-                        <div>
-                          <button onClick={() => prepararEdicaoProduto(prod)} className="btn-icon">✏️</button>
-                          <button onClick={() => handleExcluirProduto(prod.id, prod.nome)} className="btn-icon">🗑️</button>
-                        </div>
-                      </div>
-                    ))}
+            {/* VIZUALIZAÇÃO: PEDIDOS */}
+            {abaAtiva === 'pedidos' && (
+              <div className="space-y-4">
+                {pedidos.length === 0 ? (
+                  <div className="bg-white rounded-2xl border border-gray-100 p-10 flex flex-col items-center justify-center text-gray-400">
+                    <Clock size={48} className="mb-4 opacity-50" />
+                    <p className="font-medium text-lg">Nenhum pedido no momento.</p>
                   </div>
-                ))}
-              </div>
-            </div>
+                ) : (
+                  pedidos.map(ped => {
+                    const loja = restaurantes.find(r => r.id === ped.restaurante_id);
+                    return (
+                      <div key={ped.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 pb-4 border-b border-gray-50">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-wider border ${getStatusBadge(ped.status)}`}>
+                                {ped.status}
+                              </span>
+                              <span className="text-sm font-bold text-gray-400">#{ped.id.toString().slice(0, 6)}</span>
+                            </div>
+                            <h3 className="font-black text-lg text-gray-800">{ped.cliente_nome}</h3>
+                            <p className="text-sm text-gray-500 flex items-center gap-1"><MapPin size={12} /> {loja?.nome || 'Loja Excluída'}</p>
+                          </div>
+                          <div className="text-left sm:text-right">
+                            <p className="text-xs text-gray-400 uppercase font-bold mb-1">{ped.tipo_entrega} • {ped.forma_pagamento}</p>
+                            <p className="text-2xl font-black text-green-600">R$ {ped.total?.toFixed(2)}</p>
+                          </div>
+                        </div>
 
+                        {/* Ações Rápidas do Pedido */}
+                        <div className="flex flex-wrap gap-2">
+                          {ped.status === 'Aguardando' && (
+                            <button onClick={() => handleAtualizarStatus(ped.id, 'Em Preparação')} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
+                              Aceitar e Preparar
+                            </button>
+                          )}
+                          {ped.status === 'Em Preparação' && (
+                            <button onClick={() => handleAtualizarStatus(ped.id, 'Em Trânsito')} className="flex-1 sm:flex-none bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
+                              Despachar Pedido
+                            </button>
+                          )}
+                          {ped.status === 'Em Trânsito' && (
+                            <button onClick={() => handleAtualizarStatus(ped.id, 'Entregue')} className="flex-1 sm:flex-none bg-green-500 hover:bg-green-600 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
+                              Confirmar Entrega
+                            </button>
+                          )}
+                          {(ped.status !== 'Entregue' && ped.status !== 'Cancelado') && (
+                            <button onClick={() => { if (window.confirm('Cancelar este pedido?')) handleAtualizarStatus(ped.id, 'Cancelado') }} className="flex-1 sm:flex-none bg-white border-2 border-red-100 text-red-600 hover:bg-red-50 font-bold py-2 px-6 rounded-xl active:scale-95 transition-all">
+                              Cancelar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            {/* VIZUALIZAÇÃO: CATÁLOGO */}
+            {abaAtiva === 'catalogo' && (
+              <div className="space-y-6">
+                {restaurantes.length === 0 ? (
+                  <p className="text-center text-gray-400 py-10 font-medium">Cadastre uma loja primeiro.</p>
+                ) : (
+                  restaurantes.map(rest => {
+                    const produtosDaLoja = produtos.filter(p => p.restaurante_id === rest.id);
+                    return (
+                      <div key={rest.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="bg-gray-50 p-5 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                          <div>
+                            <h3 className="font-black text-xl text-gray-800">{rest.nome}</h3>
+                            <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin size={14} /> {rest.endereco}</p>
+                            <p className="text-xs text-gray-400 mt-1">CNPJ: {rest.cnpj}</p>
+                          </div>
+                          <div className="flex gap-2 w-full sm:w-auto">
+                            <button onClick={() => prepararEdicaoRestaurante(rest)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-bold text-sm transition-colors">
+                              <Edit2 size={16} /> Editar
+                            </button>
+                            <button onClick={() => handleExcluirRestaurante(rest.id, rest.nome)} className="flex-1 sm:flex-none flex items-center justify-center px-4 py-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 font-bold transition-colors">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="p-5">
+                          {produtosDaLoja.length === 0 ? (
+                            <p className="text-sm text-gray-400 italic">Nenhum produto cadastrado nesta loja.</p>
+                          ) : (
+                            <div className="divide-y divide-gray-50">
+                              {produtosDaLoja.map(prod => (
+                                <div key={prod.id} className="py-3 flex justify-between items-center group">
+                                  <div>
+                                    <p className="font-bold text-gray-800">{prod.nome}</p>
+                                    <p className="text-green-600 font-black text-sm">R$ {Number(prod.preco).toFixed(2)}</p>
+                                  </div>
+                                  <div className="flex gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => prepararEdicaoProduto(prod)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                                      <Edit2 size={18} />
+                                    </button>
+                                    <button onClick={() => handleExcluirProduto(prod.id, prod.nome)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                      <Trash2 size={18} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
-        </main>
-      </div>
-    </>
+        </div>
+      </main>
+    </div>
   );
 }
 

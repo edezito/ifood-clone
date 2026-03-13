@@ -1,48 +1,43 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import AcompanhamentoPedido from './AcompanhamentoPedido';
-import NotificacaoService from './NotificacaoService';
+import HistoricoPedidos from './HistoricoPedidos'; 
+import {
+  Search, MapPin, Star, ShoppingBag, Pizza, Coffee, Soup, Beef, X,
+  Minus, Plus, ChevronRight, Home, User, Heart, LogOut, Clock
+} from 'lucide-react';
 
-function ClienteApp({ onLogout }) {
+const ClienteApp = ({ onLogout }) => {
+  // --- ESTADOS ---
   const [restaurantes, setRestaurantes] = useState([]);
   const [produtos, setProdutos] = useState([]);
-  const [mensagem, setMensagem] = useState('');
-  const [tipoMensagem, setTipoMensagem] = useState('sucesso'); // 'sucesso', 'erro', 'info'
-
-  const [carrinho, setCarrinho] = useState([]);
-  const [carrinhoRestauranteId, setCarrinhoRestauranteId] = useState(null);
-  const [checkoutAberto, setCheckoutAberto] = useState(false);
-  
   const [usuarioLogado, setUsuarioLogado] = useState(null);
-  const [etapaCheckout, setEtapaCheckout] = useState('resumo'); 
-  const [telefone, setTelefone] = useState('');
-  const [telefoneFormatado, setTelefoneFormatado] = useState('');
-  const [codigoSms, setCodigoSms] = useState('');
-
-  const [clienteNome, setClienteNome] = useState('');
-  const [clienteEmail, setClienteEmail] = useState(''); // 🔥 NOVO: Para enviar NF por email
-  const [formaPagamento, setFormaPagamento] = useState('Pix');
-  const [tipoEntrega, setTipoEntrega] = useState('Delivery');
-
   const [pedidoAtivoId, setPedidoAtivoId] = useState(null);
-  const [mostrarAcompanhamento, setMostrarAcompanhamento] = useState(false);
-  
-  // 🔥 NOVO: Estado para notificações não lidas
-  const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
-  const [mostrarNotificacoes, setMostrarNotificacoes] = useState(false);
-  const [listaNotificacoes, setListaNotificacoes] = useState([]);
+  const [verHistorico, setVerHistorico] = useState(false);
 
-  useEffect(() => { 
-    fetchDados(); 
-  }, []);
+  const [endereco] = useState('Rua Augusta, 123 - Consolação');
+  const [busca, setBusca] = useState('');
+  const [carrinhoAberto, setCarrinhoAberto] = useState(false);
+  const [carrinho, setCarrinho] = useState([]);
+  const [categoriaAtiva, setCategoriaAtiva] = useState('todos');
+  const [restauranteExpandido, setRestauranteExpandido] = useState(null);
+  const [etapaCheckout, setEtapaCheckout] = useState('resumo');
 
-  // 🔥 NOVO: Buscar notificações quando usuário logar
+  const categoriasConfig = {
+    pizza: { nome: 'Pizza', icone: Pizza },
+    lanches: { nome: 'Lanches', icone: Coffee },
+    japonesa: { nome: 'Japonesa', icone: Soup },
+    brasileira: { nome: 'Brasileira', icone: Beef },
+    massas: { nome: 'Massas', icone: Pizza },
+    saudavel: { nome: 'Saudável', icone: Heart },
+  };
+
   useEffect(() => {
-    if (usuarioLogado && pedidoAtivoId) {
-      buscarNotificacoes();
-      inscreverNotificacoes();
-    }
-  }, [usuarioLogado, pedidoAtivoId]);
+    fetchDados();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setUsuarioLogado(session.user);
+    });
+  }, []);
 
   const fetchDados = async () => {
     const { data: rests } = await supabase.from('restaurantes').select('*');
@@ -51,609 +46,205 @@ function ClienteApp({ onLogout }) {
     if (prods) setProdutos(prods);
   };
 
-  // 🔥 NOVO: Buscar notificações do pedido
-  const buscarNotificacoes = async () => {
-    if (!pedidoAtivoId) return;
-    
-    const { data } = await supabase
-      .from('notificacoes')
-      .select('*')
-      .eq('pedido_id', pedidoAtivoId)
-      .order('criado_em', { ascending: false });
-    
-    if (data) {
-      setListaNotificacoes(data);
-      const naoLidas = data.filter(n => !n.lida).length;
-      setNotificacoesNaoLidas(naoLidas);
-    }
-  };
-
-  // 🔥 NOVO: Inscrever em notificações em tempo real
-  const inscreverNotificacoes = () => {
-    const subscription = supabase
-      .channel(`notificacoes-${pedidoAtivoId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notificacoes',
-          filter: `pedido_id=eq.${pedidoAtivoId}`
-        },
-        (payload) => {
-          console.log('Nova notificação!', payload.new);
-          setListaNotificacoes(prev => [payload.new, ...prev]);
-          setNotificacoesNaoLidas(prev => prev + 1);
-          
-          // Mostrar notificação toast
-          mostrarMensagem(payload.new.mensagem || 'Nova atualização no pedido!', 'info');
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(subscription);
-    };
-  };
-
-  // 🔥 NOVO: Marcar notificação como lida
-  const marcarNotificacaoComoLida = async (notificacaoId) => {
-    await supabase
-      .from('notificacoes')
-      .update({ lida: true })
-      .eq('id', notificacaoId);
-    
-    setListaNotificacoes(prev =>
-      prev.map(n => n.id === notificacaoId ? { ...n, lida: true } : n)
-    );
-    setNotificacoesNaoLidas(prev => Math.max(0, prev - 1));
-  };
-
-  // 🔥 NOVO: Função para mostrar mensagens com tipo
-  const mostrarMensagem = (texto, tipo = 'sucesso') => {
-    setMensagem(texto);
-    setTipoMensagem(tipo);
-    setTimeout(() => setMensagem(''), 5000);
-  };
-
+  // --- LOGICA CARRINHO ---
   const adicionarAoCarrinho = (produto, restId) => {
-    if (carrinho.length > 0 && carrinhoRestauranteId !== restId) {
-      if(window.confirm('Sua sacola tem itens de outra loja. Limpar e começar nova sacola?')) {
-        setCarrinho([{ ...produto, quantidade: 1 }]);
-        setCarrinhoRestauranteId(restId);
+    if (carrinho.length > 0 && carrinho[0].restauranteId !== restId) {
+      if (window.confirm('Sua sacola já tem itens de outro local. Limpar?')) {
+        setCarrinho([{ ...produto, quantidade: 1, restauranteId: restId }]);
       }
       return;
     }
-    setCarrinhoRestauranteId(restId);
     const itemExist = carrinho.find(i => i.id === produto.id);
-    if (itemExist) setCarrinho(carrinho.map(i => i.id === produto.id ? { ...i, quantidade: i.quantidade + 1 } : i));
-    else setCarrinho([...carrinho, { ...produto, quantidade: 1 }]);
+    if (itemExist) {
+      setCarrinho(carrinho.map(i => i.id === produto.id ? { ...i, quantidade: i.quantidade + 1 } : i));
+    } else {
+      setCarrinho([...carrinho, { ...produto, quantidade: 1, restauranteId: restId }]);
+    }
   };
 
   const calcularTotal = () => carrinho.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
 
-  const handleTelefoneChange = (e) => {
-    let value = e.target.value.replace(/\D/g, ''); 
-    if (value.length > 11) value = value.slice(0, 11); 
-    setTelefone(value); 
-  };
-
-  const handleEnviarSms = async (e) => {
-    e.preventDefault();
-    if (telefone.length < 10) return mostrarMensagem('⚠️ Digite um telefone válido.', 'erro');
+  // --- FINALIZAR PEDIDO (COM GRAVAÇÃO DE ITENS) ---
+  const finalizarPedido = async () => {
+    if (!usuarioLogado) return alert("Faça login para pedir");
     
-    mostrarMensagem('⏳ Enviando SMS...', 'info');
-    
-    const numeroCompleto = '+55' + telefone; 
-    setTelefoneFormatado(numeroCompleto); 
+    const restId = carrinho[0].restauranteId;
+    const pinGerado = Math.floor(1000 + Math.random() * 9000).toString();
 
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: numeroCompleto,
-      });
+    const { data: pedData, error: pedError } = await supabase
+      .from('pedidos')
+      .insert([{
+        restaurante_id: restId,
+        cliente_nome: "Cliente",
+        total: calcularTotal(),
+        forma_pagamento: 'Cartão',
+        tipo_entrega: 'Entrega Padrão',
+        status: 'Aguardando',
+        telefone: usuarioLogado.phone,
+        pin_entrega: pinGerado
+      }])
+      .select().single();
 
-      if (error) throw error;
+    if (pedError) return alert("Erro ao criar pedido: " + pedError.message);
 
-      setMensagem('');
-      setEtapaCheckout('codigo'); 
-    } catch (error) {
-      console.error("Erro no envio do SMS:", error.message);
-      mostrarMensagem('⚠️ Erro ao enviar SMS. Verifique o número e tente novamente.', 'erro');
-    }
-  };
-
-  const handleConfirmarCodigo = async (e) => {
-    e.preventDefault();
-    mostrarMensagem('⏳ Verificando...', 'info');
-    
-    try {
-      const { data: { session }, error } = await supabase.auth.verifyOtp({
-        phone: telefoneFormatado,
-        token: codigoSms,
-        type: 'sms',
-      });
-
-      if (error) throw error;
-
-      setUsuarioLogado(session.user);
-      setMensagem('');
-      setEtapaCheckout('dados_entrega'); 
-    } catch (error) {
-      console.error("Erro na verificação:", error.message);
-      mostrarMensagem('⚠️ Código inválido ou expirado.', 'erro');
-    }
-  };
-
-  // 🔥 NOVO: Função para enviar nota fiscal simulada
-  const enviarNotaFiscal = async (pedidoId) => {
-    if (clienteEmail) {
-      await NotificacaoService.enviarNotaFiscal(pedidoId, clienteEmail);
-    }
-  };
-
-  const finalizarPedido = async (e) => {
-    e.preventDefault();
-    mostrarMensagem('⏳ Processando pedido...', 'info');
-    const total = calcularTotal();
-    
-    // Gerar PIN aleatório de 4 dígitos
-    const pinEntrega = Math.floor(1000 + Math.random() * 9000).toString();
-
-    const { data: pedData, error: pedErr } = await supabase.from('pedidos').insert([{
-      restaurante_id: carrinhoRestauranteId, 
-      cliente_nome: clienteNome, 
-      telefone: usuarioLogado?.phone || telefoneFormatado,
-      email: clienteEmail, // 🔥 NOVO: Salvar email
-      total, 
-      forma_pagamento: formaPagamento, 
-      tipo_entrega: tipoEntrega, 
-      status: 'Aguardando',
-      pin_entrega: pinEntrega
-    }]).select();
-
-    if (pedErr) return mostrarMensagem(`Erro: ${pedErr.message}`, 'erro');
-    
-    const itens = carrinho.map(i => ({ 
-      pedido_id: pedData[0].id, 
-      produto_id: i.id, 
-      quantidade: i.quantidade, 
-      preco_unitario: i.preco 
+    const itensParaInserir = carrinho.map(item => ({
+      pedido_id: pedData.id,
+      produto_id: item.id,
+      quantidade: item.quantidade,
+      preco_unitario: item.preco
     }));
-    
-    await supabase.from('itens_pedido').insert(itens);
 
-    // 🔥 NOVO: Enviar nota fiscal
-    await enviarNotaFiscal(pedData[0].id);
+    const { error: itensError } = await supabase.from('itens_pedido').insert(itensParaInserir);
 
-    setPedidoAtivoId(pedData[0].id);
-    
-    mostrarMensagem(`🎉 Pedido #${pedData[0].id.slice(0,8)} realizado com sucesso!`, 'sucesso');
-    setCarrinho([]); 
-    setCarrinhoRestauranteId(null); 
-    setCheckoutAberto(false); 
-    setEtapaCheckout('resumo'); 
-    setClienteNome(''); 
-    setTelefone(''); 
-    setCodigoSms('');
-    
-    // Redirecionar para tela de acompanhamento
-    setTimeout(() => {
-      setMostrarAcompanhamento(true);
-    }, 2000);
-  };
-
-  const abrirCheckout = () => {
-    setCheckoutAberto(true);
-    setEtapaCheckout('resumo');
-  };
-
-  const continuarDoResumo = () => {
-    if (usuarioLogado) {
-      setEtapaCheckout('dados_entrega'); 
+    if (!itensError) {
+      setPedidoAtivoId(pedData.id);
+      setCarrinho([]);
+      setCarrinhoAberto(false);
     } else {
-      setEtapaCheckout('telefone'); 
+      alert("Pedido criado, mas houve um erro nos itens.");
     }
   };
 
-  // 🔥 NOVO: Sair do acompanhamento
-  const sairDoAcompanhamento = () => {
-    setMostrarAcompanhamento(false);
-    setPedidoAtivoId(null);
-  };
-
-  // Se estiver na tela de acompanhamento
-  if (mostrarAcompanhamento && pedidoAtivoId) {
-    return (
-      <div className="cliente-layout">
-        <header className="cliente-header">
-          <h1 style={{ fontSize: '1.3rem', margin: 0, color: '#ea1d2c' }}>🍔 DeliveryApp</h1>
-          <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-            {/* 🔥 NOVO: Ícone de notificações */}
-            <div style={{ position: 'relative' }}>
-              <button 
-                onClick={() => setMostrarNotificacoes(!mostrarNotificacoes)}
-                style={{ background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer' }}
-              >
-                🔔
-                {notificacoesNaoLidas > 0 && (
-                  <span style={{
-                    position: 'absolute',
-                    top: '-5px',
-                    right: '-5px',
-                    background: '#ea1d2c',
-                    color: 'white',
-                    borderRadius: '50%',
-                    width: '18px',
-                    height: '18px',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    {notificacoesNaoLidas}
-                  </span>
-                )}
-              </button>
-              
-              {/* 🔥 NOVO: Dropdown de notificações */}
-              {mostrarNotificacoes && (
-                <div style={{
-                  position: 'absolute',
-                  top: '40px',
-                  right: '0',
-                  width: '300px',
-                  background: 'white',
-                  borderRadius: '12px',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                  padding: '15px',
-                  zIndex: 1000,
-                  maxHeight: '400px',
-                  overflowY: 'auto'
-                }}>
-                  <h4 style={{ margin: '0 0 15px 0', color: '#0f172a' }}>Notificações</h4>
-                  {listaNotificacoes.length === 0 ? (
-                    <p style={{ color: '#64748b', textAlign: 'center' }}>Nenhuma notificação</p>
-                  ) : (
-                    listaNotificacoes.map(notif => (
-                      <div
-                        key={notif.id}
-                        onClick={() => marcarNotificacaoComoLida(notif.id)}
-                        style={{
-                          padding: '10px',
-                          background: notif.lida ? '#f8fafc' : '#e0f2fe',
-                          borderRadius: '8px',
-                          marginBottom: '8px',
-                          cursor: 'pointer',
-                          border: notif.lida ? '1px solid #e2e8f0' : '1px solid #7dd3fc'
-                        }}
-                      >
-                        <p style={{ margin: '0 0 5px 0', fontWeight: notif.lida ? 'normal' : 'bold' }}>
-                          {notif.titulo || 'Atualização'}
-                        </p>
-                        <p style={{ margin: 0, fontSize: '0.9rem', color: '#475569' }}>
-                          {notif.mensagem}
-                        </p>
-                        <small style={{ color: '#94a3b8' }}>
-                          {new Date(notif.criado_em).toLocaleTimeString()}
-                        </small>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
-        
-        <main className="cliente-container">
-          <AcompanhamentoPedido 
-            pedidoId={pedidoAtivoId} 
-            onVoltarAoMenu={sairDoAcompanhamento}
-          />
-        </main>
-      </div>
-    );
-  }
+  // --- NAVEGAÇÃO ---
+  if (pedidoAtivoId) return <AcompanhamentoPedido pedidoId={pedidoAtivoId} onVoltarAoMenu={() => setPedidoAtivoId(null)} />;
+  if (verHistorico) return <HistoricoPedidos telefone={usuarioLogado?.phone} onVoltar={() => setVerHistorico(false)} onVerDetalhes={(id) => { setPedidoAtivoId(id); setVerHistorico(false); }} />;
 
   return (
-    <>
-      <style>{`
-        .cliente-layout { min-height: 100vh; background-color: #f8fafc; font-family: 'Nunito', sans-serif; padding-bottom: 90px; }
-        .cliente-header { position: sticky; top: 0; background: #ffffff; padding: 15px 5vw; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.05); z-index: 10; }
-        .cliente-container { padding: 25px 5vw; max-width: 800px; margin: 0 auto; }
-        .rest-card { background: white; border-radius: 16px; padding: 25px; margin-bottom: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; }
-        .prod-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-top: 1px solid #f1f5f9; }
-        .btn-add { background: #ea1d2c; color: white; border: none; padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; transition: transform 0.1s, background 0.2s; }
-        .btn-add:hover { background: #c41a27; transform: scale(1.05); }
-        .fab-cart { position: fixed; bottom: 25px; right: 25px; background: #10b981; color: white; border: none; padding: 15px 25px; border-radius: 30px; font-size: 1.1rem; font-weight: bold; box-shadow: 0 6px 16px rgba(10, 185, 129, 0.4); cursor: pointer; z-index: 50; display: flex; align-items: center; gap: 10px; transition: transform 0.2s; }
-        .fab-cart:hover { transform: scale(1.05); }
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: flex-end; z-index: 100; backdrop-filter: blur(3px); }
-        .modal-content { background: white; width: 100%; max-width: 500px; border-radius: 24px 24px 0 0; padding: 30px; max-height: 85vh; overflow-y: auto; animation: slideUp 0.3s ease; }
-        @keyframes slideUp {
-          from { transform: translateY(100%); }
-          to { transform: translateY(0); }
-        }
-        @media (min-width: 600px) { 
-          .modal-overlay { align-items: center; } 
-          .modal-content { border-radius: 24px; }
-          @keyframes slideUp {
-            from { transform: translateY(100%) scale(0.9); opacity: 0; }
-            to { transform: translateY(0) scale(1); opacity: 1; }
-          }
-        }
-        .form-input { padding: 15px; border-radius: 12px; border: 1px solid #cbd5e0; font-size: 1rem; width: 100%; box-sizing: border-box; background: #f8fafc; transition: border 0.2s, box-shadow 0.2s; text-align: center; font-weight: bold; letter-spacing: 1px; }
-        .form-input:focus { outline: none; border-color: #10b981; background: white; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1); }
-        .btn-primary { padding: 18px; background: #10b981; color: white; border: none; border-radius: 12px; font-weight: bold; font-size: 1.2rem; margin-top: 15px; cursor: pointer; width: 100%; transition: background 0.2s, transform 0.1s; }
-        .btn-primary:hover { background: #0f9e6e; transform: scale(1.02); }
-        .btn-primary:active { transform: scale(0.98); }
-        .btn-secondary { padding: 15px; background: #f1f5f9; color: #334155; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; transition: background 0.2s; }
-        .btn-secondary:hover { background: #e2e8f0; }
-        .mensagem { padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; font-weight: bold; text-align: center; animation: fadeIn 0.3s; }
-        .mensagem.sucesso { background: #d1fae5; color: #065f46; border: 1px solid #34d399; }
-        .mensagem.erro { background: #fee2e2; color: #991b1b; border: 1px solid #f87171; }
-        .mensagem.info { background: #dbeafe; color: #1e40af; border: 1px solid #60a5fa; }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
-
-      <div className="cliente-layout">
-        <header className="cliente-header">
-          <h1 style={{ fontSize: '1.3rem', margin: 0, color: '#ea1d2c' }}>🍔 DeliveryApp</h1>
-          {usuarioLogado && (
-            <span style={{ color: '#64748b', fontSize: '0.9rem' }}>
-              {usuarioLogado.phone}
-            </span>
-          )}
-        </header>
-
-        <main className="cliente-container">
-          {mensagem && (
-            <div className={`mensagem ${tipoMensagem}`}>
-              {mensagem}
+    <div className="min-h-screen bg-[#f8fafc] font-sans pb-24">
+      {/* Navbar Fixa */}
+      <nav className="fixed top-0 left-0 right-0 bg-white shadow-sm z-40 p-4 border-b">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <MapPin className="text-red-600 w-5 h-5" />
+              <span className="font-bold text-gray-700 text-sm truncate max-w-[180px]">{endereco}</span>
             </div>
-          )}
-          
-          <h2 style={{ color: '#0f172a', marginBottom: '20px' }}>
-            O que vamos pedir hoje?
-          </h2>
-          
-          <div>
-            {restaurantes.map(rest => (
-              <div key={rest.id} className="rest-card">
-                <h3 style={{ margin: '0 0 5px 0' }}>{rest.nome}</h3>
-                <p style={{ margin: '0 0 20px 0', color: '#64748b' }}>
-                  📍 {rest.endereco}
-                </p>
-                <div>
-                  {produtos
-                    .filter(p => p.restaurante_id === rest.id)
-                    .map(prod => (
-                      <div key={prod.id} className="prod-item">
-                        <div>
-                          <span style={{display: 'block', fontWeight: 'bold'}}>
-                            {prod.nome}
-                          </span>
-                          <span style={{color: '#10b981', fontWeight: 'bold'}}>
-                            R$ {prod.preco.toFixed(2)}
-                          </span>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setVerHistorico(true)} className="p-2 bg-gray-50 rounded-full text-gray-600"><Clock size={20}/></button>
+              <button onClick={onLogout} className="p-2 bg-red-50 rounded-full text-red-600"><LogOut size={18}/></button>
+            </div>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="Pratos ou restaurantes"
+              className="w-full bg-gray-100 p-2.5 pl-10 rounded-xl outline-none focus:ring-2 focus:ring-red-500/10"
+              onChange={(e) => setBusca(e.target.value)}
+            />
+          </div>
+        </div>
+      </nav>
+
+      <main className="pt-36 px-4 max-w-4xl mx-auto">
+        {/* Categorias Estilo Pílula */}
+        <div className="flex gap-2 overflow-x-auto pb-6 scrollbar-hide -mx-4 px-4">
+          <button 
+            onClick={() => setCategoriaAtiva('todos')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border whitespace-nowrap transition-all ${
+              categoriaAtiva === 'todos' ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600'
+            }`}
+          >
+            <Home size={16} /> <span className="text-sm font-bold">Início</span>
+          </button>
+          {Object.keys(categoriasConfig).map(key => {
+            const Icon = categoriasConfig[key].icone;
+            const active = categoriaAtiva === key;
+            return (
+              <button 
+                key={key} 
+                onClick={() => setCategoriaAtiva(key)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full border whitespace-nowrap transition-all ${
+                  active ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600'
+                }`}
+              >
+                <Icon size={16} /> <span className="text-sm font-bold">{categoriasConfig[key].nome}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Restaurantes */}
+        <div className="space-y-4">
+          <h2 className="font-black text-gray-800 text-xl tracking-tight">Lojas</h2>
+          {restaurantes
+            .filter(r => (categoriaAtiva === 'todos' || r.categoria === categoriaAtiva) && r.nome.toLowerCase().includes(busca.toLowerCase()))
+            .map(rest => (
+              <div key={rest.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm" onClick={() => setRestauranteExpandido(restauranteExpandido === rest.id ? null : rest.id)}>
+                <div className="flex justify-between items-center cursor-pointer">
+                  <div className="flex-1">
+                    <h3 className="font-bold text-lg text-gray-800 leading-tight">{rest.nome}</h3>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                      <Star className="text-yellow-500 fill-yellow-500" size={12} />
+                      <span className="font-bold text-yellow-600">4.8</span>
+                      <span>•</span>
+                      <span className="uppercase tracking-wide">{rest.categoria}</span>
+                    </div>
+                  </div>
+                  <ChevronRight className={`text-gray-300 transition-transform ${restauranteExpandido === rest.id ? 'rotate-90' : ''}`} />
+                </div>
+
+                {restauranteExpandido === rest.id && (
+                  <div className="mt-4 border-t border-gray-50 pt-4 space-y-3">
+                    {produtos.filter(p => p.restaurante_id === rest.id).map(prod => (
+                      <div key={prod.id} className="flex justify-between items-center bg-gray-50/50 p-3 rounded-xl">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-gray-700">{prod.nome}</span>
+                          <span className="text-green-600 font-black">R$ {prod.preco.toFixed(2)}</span>
                         </div>
                         <button 
-                          onClick={() => adicionarAoCarrinho(prod, rest.id)} 
-                          className="btn-add"
+                          onClick={(e) => { e.stopPropagation(); adicionarAoCarrinho(prod, rest.id); }}
+                          className="bg-white border-2 border-red-600 text-red-600 font-black px-4 py-1.5 rounded-xl hover:bg-red-600 hover:text-white transition-all active:scale-90"
                         >
-                          + Add
+                          ADD
                         </button>
                       </div>
                     ))}
-                </div>
+                  </div>
+                )}
               </div>
             ))}
+        </div>
+      </main>
+
+      {/* Carrinho Flutuante */}
+      {carrinho.length > 0 && (
+        <button onClick={() => setCarrinhoAberto(true)} className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-md bg-red-600 text-white p-4 rounded-2xl font-black flex justify-between shadow-2xl items-center active:scale-95 transition-transform">
+          <div className="flex items-center gap-3">
+            <ShoppingBag size={22} />
+            <span className="text-sm font-bold uppercase tracking-wider">{carrinho.length} itens</span>
           </div>
-        </main>
+          <span className="text-lg">R$ {calcularTotal().toFixed(2)}</span>
+        </button>
+      )}
 
-        {carrinho.length > 0 && !checkoutAberto && (
-          <button onClick={abrirCheckout} className="fab-cart">
-            🛒 <span>Ver Sacola</span> 
-            <span style={{ 
-              background: 'rgba(255,255,255,0.2)', 
-              padding: '2px 8px', 
-              borderRadius: '12px' 
-            }}>
-              R$ {calcularTotal().toFixed(2)}
-            </span>
-          </button>
-        )}
-
-        {checkoutAberto && (
-          <div className="modal-overlay" onClick={() => setCheckoutAberto(false)}>
-            <div className="modal-content" onClick={e => e.stopPropagation()}>
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                marginBottom: '20px' 
-              }}>
-                <h2 style={{ margin: 0, color: '#0f172a' }}>
-                  {etapaCheckout === 'resumo' && 'Sua Sacola'}
-                  {etapaCheckout === 'telefone' && 'Seu WhatsApp'}
-                  {etapaCheckout === 'codigo' && 'Código de Verificação'}
-                  {etapaCheckout === 'dados_entrega' && 'Finalizar Pedido'}
-                </h2>
-                <button 
-                  onClick={() => setCheckoutAberto(false)} 
-                  style={{ 
-                    background: '#f1f5f9', 
-                    border: 'none', 
-                    width: '36px', 
-                    height: '36px', 
-                    borderRadius: '50%', 
-                    cursor: 'pointer', 
-                    fontWeight: 'bold',
-                    transition: 'background 0.2s'
-                  }}
-                  onMouseEnter={(e) => e.target.style.background = '#e2e8f0'}
-                  onMouseLeave={(e) => e.target.style.background = '#f1f5f9'}
-                >
-                  ✕
-                </button>
-              </div>
-
-              {etapaCheckout === 'resumo' && (
-                <>
-                  <div style={{ 
-                    background: '#f8fafc', 
-                    padding: '15px', 
-                    borderRadius: '12px', 
-                    marginBottom: '25px' 
-                  }}>
-                    {carrinho.map(item => (
-                      <div key={item.id} style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        marginBottom: '10px', 
-                        color: '#334155' 
-                      }}>
-                        <span>
-                          <strong style={{ color: '#ea1d2c' }}>{item.quantidade}x</strong> {item.nome}
-                        </span>
-                        <span style={{ fontWeight: 'bold' }}>
-                          R$ {(item.preco * item.quantidade).toFixed(2)}
-                        </span>
-                      </div>
-                    ))}
-                    <div style={{ 
-                      borderTop: '2px dashed #cbd5e0', 
-                      margin: '15px 0', 
-                      padding: '15px 0 0 0', 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      fontSize: '1.2rem', 
-                      fontWeight: '900', 
-                      color: '#0f172a' 
-                    }}>
-                      <span>Total</span>
-                      <span>R$ {calcularTotal().toFixed(2)}</span>
-                    </div>
-                  </div>
-                  <button onClick={continuarDoResumo} className="btn-primary">
-                    Continuar
-                  </button>
-                </>
-              )}
-
-              {etapaCheckout === 'telefone' && (
-                <form onSubmit={handleEnviarSms}>
-                  <p style={{ color: '#64748b', marginBottom: '20px', textAlign: 'center' }}>
-                    Precisamos do seu WhatsApp para enviar atualizações do pedido.
-                  </p>
-                  <input 
-                    type="tel" 
-                    value={telefone} 
-                    onChange={handleTelefoneChange} 
-                    placeholder="11999999999" 
-                    required 
-                    className="form-input" 
-                  />
-                  <button type="submit" className="btn-primary" style={{ background: '#0f172a' }}>
-                    Enviar SMS de Verificação
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setEtapaCheckout('resumo')} 
-                    className="btn-secondary"
-                    style={{ marginTop: '10px' }}
-                  >
-                    Voltar
-                  </button>
-                </form>
-              )}
-
-              {etapaCheckout === 'codigo' && (
-                <form onSubmit={handleConfirmarCodigo}>
-                  <p style={{ color: '#64748b', marginBottom: '20px', textAlign: 'center' }}>
-                    Digite o código de 6 dígitos que enviamos para {telefone}
-                  </p>
-                  <input 
-                    type="text" 
-                    value={codigoSms} 
-                    onChange={(e) => setCodigoSms(e.target.value.replace(/\D/g, '').slice(0,6))} 
-                    placeholder="000000" 
-                    required 
-                    className="form-input" 
-                    style={{ fontSize: '1.5rem', letterSpacing: '5px' }}
-                  />
-                  <button type="submit" className="btn-primary" style={{ background: '#0f172a' }}>
-                    Confirmar Código
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => setEtapaCheckout('telefone')} 
-                    className="btn-secondary"
-                    style={{ marginTop: '10px' }}
-                  >
-                    Corrigir número
-                  </button>
-                </form>
-              )}
-
-              {etapaCheckout === 'dados_entrega' && (
-                <form onSubmit={finalizarPedido} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                  <input 
-                    value={clienteNome} 
-                    onChange={e => setClienteNome(e.target.value)} 
-                    placeholder="Seu nome completo" 
-                    required 
-                    className="form-input" 
-                    style={{ textAlign: 'left', letterSpacing: 'normal' }} 
-                  />
-                  
-                  {/* 🔥 NOVO: Campo de email para nota fiscal */}
-                  <input 
-                    value={clienteEmail} 
-                    onChange={e => setClienteEmail(e.target.value)} 
-                    placeholder="Seu email (para nota fiscal)" 
-                    type="email"
-                    className="form-input" 
-                    style={{ textAlign: 'left', letterSpacing: 'normal' }} 
-                  />
-                  
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <select 
-                      value={formaPagamento} 
-                      onChange={e => setFormaPagamento(e.target.value)} 
-                      className="form-input" 
-                      style={{ textAlign: 'left', letterSpacing: 'normal', flex: 1 }}
-                    >
-                      <option value="Pix">💳 Pix</option>
-                      <option value="Cartão">💳 Cartão</option>
-                      <option value="Dinheiro">💵 Dinheiro</option>
-                    </select>
-                    
-                    <select 
-                      value={tipoEntrega} 
-                      onChange={e => setTipoEntrega(e.target.value)} 
-                      className="form-input" 
-                      style={{ textAlign: 'left', letterSpacing: 'normal', flex: 1 }}
-                    >
-                      <option value="Delivery">🛵 Delivery</option>
-                      <option value="Retirada">🏪 Retirada</option>
-                    </select>
-                  </div>
-
-                  <button type="submit" className="btn-primary">
-                    Confirmar Pedido - R$ {calcularTotal().toFixed(2)}
-                  </button>
-                </form>
-              )}
-
+      {/* Checkout Modal */}
+      {carrinhoAberto && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end backdrop-blur-[2px]">
+          <div className="bg-white w-full rounded-t-[32px] p-6 shadow-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-black text-gray-800 tracking-tight">Sua sacola</h2>
+              <button onClick={() => setCarrinhoAberto(false)} className="p-2 bg-gray-100 rounded-full"><X size={20}/></button>
             </div>
+            <div className="overflow-y-auto flex-1 space-y-4 mb-6 pr-2">
+               {carrinho.map(item => (
+                 <div key={item.id} className="flex justify-between items-center border-b border-gray-50 pb-3">
+                    <div className="flex flex-col">
+                      <span className="font-bold text-gray-800">{item.nome}</span>
+                      <span className="text-xs text-gray-400 font-bold uppercase tracking-tighter">{item.quantidade}x R$ {item.preco.toFixed(2)}</span>
+                    </div>
+                    <span className="font-black text-gray-900">R$ {(item.preco * item.quantidade).toFixed(2)}</span>
+                 </div>
+               ))}
+            </div>
+            <button onClick={finalizarPedido} className="w-full bg-red-600 text-white p-4 rounded-2xl font-black text-xl shadow-lg shadow-red-200 mb-2">
+              Fazer Pedido
+            </button>
           </div>
-        )}
-      </div>
-    </>
+        </div>
+      )}
+    </div>
   );
-}
+};
 
 export default ClienteApp;
