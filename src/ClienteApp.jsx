@@ -1,52 +1,86 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import AcompanhamentoPedido from './AcompanhamentoPedido';
-import HistoricoPedidos from './HistoricoPedidos'; 
+import HistoricoPedidos from './HistoricoPedidos';
+import LoginCliente from './LoginCliente';
 import {
   Search, MapPin, Star, ShoppingBag, Pizza, Coffee, Soup, Beef, X,
   Minus, Plus, ChevronRight, Home, User, Heart, LogOut, Clock
 } from 'lucide-react';
 
+const categoriasConfig = {
+  pizza: { nome: 'Pizza', icone: Pizza },
+  lanches: { nome: 'Lanches', icone: Coffee },
+  japonesa: { nome: 'Japonesa', icone: Soup },
+  brasileira: { nome: 'Brasileira', icone: Beef },
+  massas: { nome: 'Massas', icone: Pizza },
+  saudavel: { nome: 'Saudável', icone: Heart },
+};
+
 const ClienteApp = ({ onLogout }) => {
-  // --- ESTADOS ---
   const [restaurantes, setRestaurantes] = useState([]);
   const [produtos, setProdutos] = useState([]);
   const [usuarioLogado, setUsuarioLogado] = useState(null);
   const [pedidoAtivoId, setPedidoAtivoId] = useState(null);
   const [verHistorico, setVerHistorico] = useState(false);
-
-  const [endereco] = useState('Rua Augusta, 123 - Consolação');
+  const [precisaLogar, setPrecisaLogar] = useState(false);
+  const [carrinhoPendente, setCarrinhoPendente] = useState(null);
+  const [enderecoPadrao] = useState('Rua Augusta, 123 - Consolação');
   const [busca, setBusca] = useState('');
   const [carrinhoAberto, setCarrinhoAberto] = useState(false);
   const [carrinho, setCarrinho] = useState([]);
   const [categoriaAtiva, setCategoriaAtiva] = useState('todos');
   const [restauranteExpandido, setRestauranteExpandido] = useState(null);
-  const [etapaCheckout, setEtapaCheckout] = useState('resumo');
-
-  const categoriasConfig = {
-    pizza: { nome: 'Pizza', icone: Pizza },
-    lanches: { nome: 'Lanches', icone: Coffee },
-    japonesa: { nome: 'Japonesa', icone: Soup },
-    brasileira: { nome: 'Brasileira', icone: Beef },
-    massas: { nome: 'Massas', icone: Pizza },
-    saudavel: { nome: 'Saudável', icone: Heart },
-  };
 
   useEffect(() => {
     fetchDados();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setUsuarioLogado(session.user);
-    });
+    verificarSessao();
   }, []);
 
-  const fetchDados = async () => {
-    const { data: rests } = await supabase.from('restaurantes').select('*');
-    if (rests) setRestaurantes(rests);
-    const { data: prods } = await supabase.from('produtos').select('*');
-    if (prods) setProdutos(prods);
+  const verificarSessao = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      await buscarDadosCliente(session.user);
+    }
   };
 
-  // --- LOGICA CARRINHO ---
+  const buscarDadosCliente = async (user) => {
+    try {
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('nome, endereco, complemento, telefone')
+        .eq('id', user.id)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Erro ao buscar cliente:', error);
+      }
+      
+      setUsuarioLogado({
+        ...user,
+        nome: data?.nome || user.user_metadata?.nome || 'Cliente',
+        endereco: data?.endereco,
+        complemento: data?.complemento,
+        telefone: data?.telefone || user.phone
+      });
+    } catch (error) {
+      console.error('Erro:', error);
+      setUsuarioLogado(user);
+    }
+  };
+
+  const fetchDados = async () => {
+    try {
+      const { data: rests } = await supabase.from('restaurantes').select('*');
+      if (rests) setRestaurantes(rests);
+      
+      const { data: prods } = await supabase.from('produtos').select('*');
+      if (prods) setProdutos(prods);
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
+    }
+  };
+
   const adicionarAoCarrinho = (produto, restId) => {
     if (carrinho.length > 0 && carrinho[0].restauranteId !== restId) {
       if (window.confirm('Sua sacola já tem itens de outro local. Limpar?')) {
@@ -64,50 +98,98 @@ const ClienteApp = ({ onLogout }) => {
 
   const calcularTotal = () => carrinho.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
 
-  // --- FINALIZAR PEDIDO (COM GRAVAÇÃO DE ITENS) ---
-  const finalizarPedido = async () => {
-    if (!usuarioLogado) return alert("Faça login para pedir");
-    
-    const restId = carrinho[0].restauranteId;
-    const pinGerado = Math.floor(1000 + Math.random() * 9000).toString();
+  const finalizarPedido = async (carrinhoData = null) => {
+  const carrinhoAtual = carrinhoData || carrinho;
+  
+  if (!usuarioLogado) {
+    setCarrinhoPendente(carrinhoAtual);
+    setPrecisaLogar(true);
+    setCarrinhoAberto(false);
+    return;
+  }
+  
+  if (carrinhoAtual.length === 0) {
+    alert('Carrinho vazio!');
+    return;
+  }
+  
+  const restId = carrinhoAtual[0].restauranteId;
+  const pinGerado = Math.floor(1000 + Math.random() * 9000).toString();
+  const total = calcularTotal();
 
+  try {
+    // 1. Cria o pedido na tabela pedidos
     const { data: pedData, error: pedError } = await supabase
       .from('pedidos')
       .insert([{
         restaurante_id: restId,
-        cliente_nome: "Cliente",
-        total: calcularTotal(),
+        cliente_nome: usuarioLogado.nome || "Cliente",
+        cliente_id: usuarioLogado.id,
+        total: total,
         forma_pagamento: 'Cartão',
-        tipo_entrega: 'Entrega Padrão',
+        tipo_entrega: 'Entrega',
         status: 'Aguardando',
-        telefone: usuarioLogado.phone,
-        pin_entrega: pinGerado
+        telefone: usuarioLogado.telefone || usuarioLogado.phone,
+        pin_entrega: pinGerado,
+        email: usuarioLogado.email,
+        endereco: usuarioLogado.endereco || enderecoPadrao
       }])
-      .select().single();
+      .select()
+      .single();
 
-    if (pedError) return alert("Erro ao criar pedido: " + pedError.message);
+    if (pedError) throw new Error(pedError.message);
 
-    const itensParaInserir = carrinho.map(item => ({
+    // 2. Cria os itens do pedido
+    const itensParaInserir = carrinhoAtual.map(item => ({
       pedido_id: pedData.id,
       produto_id: item.id,
       quantidade: item.quantidade,
       preco_unitario: item.preco
     }));
 
-    const { error: itensError } = await supabase.from('itens_pedido').insert(itensParaInserir);
+    const { error: itensError } = await supabase
+      .from('itens_pedido')
+      .insert(itensParaInserir);
 
-    if (!itensError) {
-      setPedidoAtivoId(pedData.id);
-      setCarrinho([]);
-      setCarrinhoAberto(false);
-    } else {
-      alert("Pedido criado, mas houve um erro nos itens.");
-    }
-  };
+    if (itensError) throw new Error(itensError.message);
 
-  // --- NAVEGAÇÃO ---
-  if (pedidoAtivoId) return <AcompanhamentoPedido pedidoId={pedidoAtivoId} onVoltarAoMenu={() => setPedidoAtivoId(null)} />;
-  if (verHistorico) return <HistoricoPedidos telefone={usuarioLogado?.phone} onVoltar={() => setVerHistorico(false)} onVerDetalhes={(id) => { setPedidoAtivoId(id); setVerHistorico(false); }} />;
+    // 3. Limpa carrinho e vai direto para acompanhamento (SEM ALERT)
+    setCarrinho([]);
+    setCarrinhoPendente(null);
+    setCarrinhoAberto(false);
+    setPedidoAtivoId(pedData.id); // Redireciona para tela de acompanhamento
+    
+  } catch (error) {
+    console.error('Erro ao finalizar:', error);
+    alert(`Erro ao fazer pedido: ${error.message}`);
+  }
+};
+
+  // Navegação
+  if (pedidoAtivoId) {
+    return <AcompanhamentoPedido pedidoId={pedidoAtivoId} onVoltarAoMenu={() => setPedidoAtivoId(null)} />;
+  }
+  
+  if (verHistorico) {
+    return <HistoricoPedidos telefone={usuarioLogado?.telefone || usuarioLogado?.phone} onVoltar={() => setVerHistorico(false)} onVerDetalhes={(id) => { setPedidoAtivoId(id); setVerHistorico(false); }} />;
+  }
+  
+  if (precisaLogar) {
+    return (
+      <LoginCliente 
+        onLoginSucesso={async (user) => {
+          await buscarDadosCliente(user);
+          setPrecisaLogar(false);
+          if (carrinhoPendente) {
+            await finalizarPedido(carrinhoPendente);
+            setCarrinhoPendente(null);
+          } else {
+            setCarrinhoAberto(true);
+          }
+        }} 
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans pb-24">
@@ -117,11 +199,22 @@ const ClienteApp = ({ onLogout }) => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <MapPin className="text-red-600 w-5 h-5" />
-              <span className="font-bold text-gray-700 text-sm truncate max-w-[180px]">{endereco}</span>
+              <span className="font-bold text-gray-700 text-sm truncate max-w-[180px]">
+                {usuarioLogado?.endereco || enderecoPadrao}
+              </span>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setVerHistorico(true)} className="p-2 bg-gray-50 rounded-full text-gray-600"><Clock size={20}/></button>
-              <button onClick={onLogout} className="p-2 bg-red-50 rounded-full text-red-600"><LogOut size={18}/></button>
+              {usuarioLogado && (
+                <span className="text-sm text-gray-600 mr-2">
+                  Olá, {usuarioLogado.nome?.split(' ')[0] || 'Cliente'}
+                </span>
+              )}
+              <button onClick={() => setVerHistorico(true)} className="p-2 bg-gray-50 rounded-full text-gray-600">
+                <Clock size={20}/>
+              </button>
+              <button onClick={onLogout} className="p-2 bg-red-50 rounded-full text-red-600">
+                <LogOut size={18}/>
+              </button>
             </div>
           </div>
           <div className="relative">
@@ -137,7 +230,7 @@ const ClienteApp = ({ onLogout }) => {
       </nav>
 
       <main className="pt-36 px-4 max-w-4xl mx-auto">
-        {/* Categorias Estilo Pílula */}
+        {/* Categorias */}
         <div className="flex gap-2 overflow-x-auto pb-6 scrollbar-hide -mx-4 px-4">
           <button 
             onClick={() => setCategoriaAtiva('todos')}
@@ -186,7 +279,7 @@ const ClienteApp = ({ onLogout }) => {
 
                 {restauranteExpandido === rest.id && (
                   <div className="mt-4 border-t border-gray-50 pt-4 space-y-3">
-                    {produtos.filter(p => p.restaurante_id === rest.id).map(prod => (
+                    {produtos.filter(p => p.restaurante_id === rest.id && p.disponivel !== false).map(prod => (
                       <div key={prod.id} className="flex justify-between items-center bg-gray-50/50 p-3 rounded-xl">
                         <div className="flex flex-col">
                           <span className="font-bold text-gray-700">{prod.nome}</span>
@@ -227,17 +320,17 @@ const ClienteApp = ({ onLogout }) => {
               <button onClick={() => setCarrinhoAberto(false)} className="p-2 bg-gray-100 rounded-full"><X size={20}/></button>
             </div>
             <div className="overflow-y-auto flex-1 space-y-4 mb-6 pr-2">
-               {carrinho.map(item => (
-                 <div key={item.id} className="flex justify-between items-center border-b border-gray-50 pb-3">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-gray-800">{item.nome}</span>
-                      <span className="text-xs text-gray-400 font-bold uppercase tracking-tighter">{item.quantidade}x R$ {item.preco.toFixed(2)}</span>
-                    </div>
-                    <span className="font-black text-gray-900">R$ {(item.preco * item.quantidade).toFixed(2)}</span>
-                 </div>
-               ))}
+              {carrinho.map(item => (
+                <div key={item.id} className="flex justify-between items-center border-b border-gray-50 pb-3">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-gray-800">{item.nome}</span>
+                    <span className="text-xs text-gray-400 font-bold uppercase tracking-tighter">{item.quantidade}x R$ {item.preco.toFixed(2)}</span>
+                  </div>
+                  <span className="font-black text-gray-900">R$ {(item.preco * item.quantidade).toFixed(2)}</span>
+                </div>
+              ))}
             </div>
-            <button onClick={finalizarPedido} className="w-full bg-red-600 text-white p-4 rounded-2xl font-black text-xl shadow-lg shadow-red-200 mb-2">
+            <button onClick={() => finalizarPedido()} className="w-full bg-red-600 text-white p-4 rounded-2xl font-black text-xl shadow-lg shadow-red-200 mb-2">
               Fazer Pedido
             </button>
           </div>

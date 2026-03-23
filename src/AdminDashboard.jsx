@@ -1,9 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   Store, ShoppingBag, Package, MapPin, Edit2, Trash2,
-  CheckCircle, Clock, X, PlusCircle, AlertCircle, LogOut
+  CheckCircle, Clock, X, PlusCircle, AlertCircle, LogOut, Eye
 } from 'lucide-react';
+
+// Correção do ícone padrão do Leaflet no React
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+// Componente de Mapa
+const MapaLocalizacao = ({ latitude, longitude, endereco, nome }) => {
+  if (!latitude || !longitude) {
+    return (
+      <div className="bg-gray-100 rounded-xl p-4 text-center text-gray-500 text-sm">
+        <MapPin size={20} className="mx-auto mb-2 text-gray-400" />
+        Localização não disponível
+        <p className="text-xs mt-1">Atualize o endereço para gerar as coordenadas</p>
+      </div>
+    );
+  }
+
+  const position = [parseFloat(latitude), parseFloat(longitude)];
+
+  return (
+    <div className="rounded-xl overflow-hidden border border-gray-200">
+      <MapContainer
+        center={position}
+        zoom={15}
+        style={{ height: '200px', width: '100%' }}
+        scrollWheelZoom={false}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        <Marker position={position}>
+          <Popup>
+            <div className="text-sm">
+              <strong>{nome}</strong><br />
+              {endereco}
+            </div>
+          </Popup>
+        </Marker>
+      </MapContainer>
+    </div>
+  );
+};
 
 function AdminDashboard({ onLogout }) {
   // Estados de Dados
@@ -14,12 +64,15 @@ function AdminDashboard({ onLogout }) {
   // Estados de UI
   const [mensagem, setMensagem] = useState('');
   const [tipoMensagem, setTipoMensagem] = useState('info');
-  const [abaAtiva, setAbaAtiva] = useState('pedidos'); // pedidos, catalogo, gerenciar
+  const [abaAtiva, setAbaAtiva] = useState('pedidos');
+  const [showFormulario, setShowFormulario] = useState(false);
 
   // Estados de Formulário
   const [nomeRest, setNomeRest] = useState('');
   const [cnpj, setCnpj] = useState('');
   const [endereco, setEndereco] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
   const [nomeProd, setNomeProd] = useState('');
   const [preco, setPreco] = useState('');
   const [restauranteSelecionado, setRestauranteSelecionado] = useState('');
@@ -27,18 +80,10 @@ function AdminDashboard({ onLogout }) {
   // Estados de Edição
   const [editandoRestId, setEditandoRestId] = useState(null);
   const [editandoProdId, setEditandoProdId] = useState(null);
+  const [buscandoCoordenadas, setBuscandoCoordenadas] = useState(false);
 
   useEffect(() => {
     fetchDados();
-
-    // Opcional: Escutar novos pedidos em tempo real (Descomente se quiser)
-    /*
-    const channel = supabase.channel('pedidos_admin')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos' }, payload => {
-        fetchDados();
-      }).subscribe();
-    return () => supabase.removeChannel(channel);
-    */
   }, []);
 
   const mostrarMensagem = (texto, tipo = 'info') => {
@@ -54,32 +99,87 @@ function AdminDashboard({ onLogout }) {
     const { data: prods } = await supabase.from('produtos').select('*');
     if (prods) setProdutos(prods);
 
-    const { data: peds } = await supabase.from('pedidos').select('*').order('id', { ascending: false });
+    const { data: peds } = await supabase.from('pedidos').select('*').order('criado_em', { ascending: false });
     if (peds) setPedidos(peds);
   };
 
   const obterCoordenadas = async (enderecoDigitado) => {
+    setBuscandoCoordenadas(true);
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(enderecoDigitado)}`);
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(enderecoDigitado)}&limit=1&countrycodes=BR`
+      );
       const data = await response.json();
-      if (data && data.length > 0) return { lat: parseFloat(data[0].lat).toFixed(6), lng: parseFloat(data[0].lon).toFixed(6) };
+      
+      if (data && data.length > 0) {
+        const lat = parseFloat(data[0].lat).toFixed(6);
+        const lng = parseFloat(data[0].lon).toFixed(6);
+        return { lat, lng };
+      }
       return null;
-    } catch (error) { return null; }
+    } catch (error) {
+      console.error('Erro ao obter coordenadas:', error);
+      return null;
+    } finally {
+      setBuscandoCoordenadas(false);
+    }
+  };
+
+  const buscarCoordenadas = async () => {
+    if (!endereco) {
+      mostrarMensagem('Digite um endereço primeiro', 'error');
+      return;
+    }
+    
+    mostrarMensagem('Buscando coordenadas...', 'info');
+    const coordenadas = await obterCoordenadas(endereco);
+    
+    if (coordenadas) {
+      setLatitude(coordenadas.lat);
+      setLongitude(coordenadas.lng);
+      mostrarMensagem(`Coordenadas encontradas: ${coordenadas.lat}, ${coordenadas.lng}`, 'success');
+    } else {
+      setLatitude('');
+      setLongitude('');
+      mostrarMensagem('Endereço não encontrado. Tente ser mais específico.', 'error');
+    }
   };
 
   // --- FUNÇÕES DE RESTAURANTE ---
   const handleSalvarRestaurante = async (e) => {
     e.preventDefault();
-    mostrarMensagem('Buscando coordenadas...', 'info');
-
-    const coordenadas = await obterCoordenadas(endereco);
-    if (!coordenadas) return mostrarMensagem('Endereço não encontrado pelo GPS. Tente ser mais específico.', 'error');
+    
+    if (!endereco) {
+      mostrarMensagem('Digite o endereço completo', 'error');
+      return;
+    }
+    
+    // Se não tem coordenadas, tenta buscar
+    let lat = latitude;
+    let lng = longitude;
+    
+    if (!lat || !lng) {
+      mostrarMensagem('Buscando coordenadas...', 'info');
+      const coordenadas = await obterCoordenadas(endereco);
+      if (coordenadas) {
+        lat = coordenadas.lat;
+        lng = coordenadas.lng;
+      } else {
+        return mostrarMensagem('Não foi possível localizar o endereço. Verifique e tente novamente.', 'error');
+      }
+    }
 
     try {
       if (editandoRestId) {
         const { data, error } = await supabase
           .from('restaurantes')
-          .update({ nome: nomeRest, cnpj, endereco, latitude: coordenadas.lat, longitude: coordenadas.lng })
+          .update({ 
+            nome: nomeRest, 
+            cnpj, 
+            endereco, 
+            latitude: lat, 
+            longitude: lng 
+          })
           .eq('id', editandoRestId)
           .select();
         if (error) throw error;
@@ -88,65 +188,92 @@ function AdminDashboard({ onLogout }) {
       } else {
         const { data, error } = await supabase
           .from('restaurantes')
-          .insert([{ nome: nomeRest, cnpj, endereco, latitude: coordenadas.lat, longitude: coordenadas.lng }])
+          .insert([{ 
+            nome: nomeRest, 
+            cnpj, 
+            endereco, 
+            latitude: lat, 
+            longitude: lng 
+          }])
           .select();
         if (error) throw error;
         setRestaurantes([...restaurantes, data[0]]);
         mostrarMensagem('Loja cadastrada com sucesso!', 'success');
       }
       cancelarEdicaoRest();
+      setShowFormulario(false);
     } catch (error) {
       mostrarMensagem(`Erro: ${error.message}`, 'error');
     }
   };
 
   const handleExcluirRestaurante = async (id, nome) => {
-    if (!window.confirm(`ATENÇÃO: Deseja excluir "${nome}" e todos os produtos vinculados?`)) return;
+    if (!window.confirm(`ATENÇÃO: Deseja excluir "${nome}" e TODOS os produtos vinculados?\n\nEsta ação não pode ser desfeita!`)) return;
     try {
       const { error } = await supabase.from('restaurantes').delete().eq('id', id);
       if (error) throw error;
       setRestaurantes(restaurantes.filter(r => r.id !== id));
       setProdutos(produtos.filter(p => p.restaurante_id !== id));
-      mostrarMensagem('Loja excluída!', 'success');
+      mostrarMensagem('Loja excluída com sucesso!', 'success');
     } catch (error) {
       mostrarMensagem(`Erro ao excluir: ${error.message}`, 'error');
     }
   };
 
   const prepararEdicaoRestaurante = (rest) => {
-    setNomeRest(rest.nome); setCnpj(rest.cnpj); setEndereco(rest.endereco);
+    setNomeRest(rest.nome);
+    setCnpj(rest.cnpj);
+    setEndereco(rest.endereco);
+    setLatitude(rest.latitude || '');
+    setLongitude(rest.longitude || '');
     setEditandoRestId(rest.id);
-    setAbaAtiva('gerenciar');
+    setShowFormulario(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const cancelarEdicaoRest = () => {
-    setNomeRest(''); setCnpj(''); setEndereco(''); setEditandoRestId(null);
+    setNomeRest('');
+    setCnpj('');
+    setEndereco('');
+    setLatitude('');
+    setLongitude('');
+    setEditandoRestId(null);
   };
 
   // --- FUNÇÕES DE PRODUTO ---
   const handleSalvarProduto = async (e) => {
     e.preventDefault();
-    if (!restauranteSelecionado) return mostrarMensagem('Selecione uma loja para vincular o produto.', 'error');
+    if (!restauranteSelecionado) {
+      return mostrarMensagem('Selecione uma loja para vincular o produto.', 'error');
+    }
 
     try {
       if (editandoProdId) {
         const { data, error } = await supabase
           .from('produtos')
-          .update({ nome: nomeProd, preco: parseFloat(preco.replace(',', '.')), restaurante_id: restauranteSelecionado })
+          .update({ 
+            nome: nomeProd, 
+            preco: parseFloat(preco.replace(',', '.')), 
+            restaurante_id: restauranteSelecionado 
+          })
           .eq('id', editandoProdId)
           .select();
         if (error) throw error;
         setProdutos(produtos.map(p => p.id === editandoProdId ? data[0] : p));
-        mostrarMensagem('Produto atualizado!', 'success');
+        mostrarMensagem('Produto atualizado com sucesso!', 'success');
       } else {
         const { data, error } = await supabase
           .from('produtos')
-          .insert([{ nome: nomeProd, preco: parseFloat(preco.replace(',', '.')), restaurante_id: restauranteSelecionado }])
+          .insert([{ 
+            nome: nomeProd, 
+            preco: parseFloat(preco.replace(',', '.')), 
+            restaurante_id: restauranteSelecionado,
+            disponivel: true
+          }])
           .select();
         if (error) throw error;
         setProdutos([...produtos, data[0]]);
-        mostrarMensagem('Produto salvo!', 'success');
+        mostrarMensagem('Produto adicionado com sucesso!', 'success');
       }
       cancelarEdicaoProd();
     } catch (error) {
@@ -160,27 +287,35 @@ function AdminDashboard({ onLogout }) {
       const { error } = await supabase.from('produtos').delete().eq('id', id);
       if (error) throw error;
       setProdutos(produtos.filter(p => p.id !== id));
-      mostrarMensagem('Produto removido!', 'success');
+      mostrarMensagem('Produto removido com sucesso!', 'success');
     } catch (error) {
       mostrarMensagem(`Erro ao remover: ${error.message}`, 'error');
     }
   };
 
   const prepararEdicaoProduto = (prod) => {
-    setNomeProd(prod.nome); setPreco(prod.preco.toString()); setRestauranteSelecionado(prod.restaurante_id);
+    setNomeProd(prod.nome);
+    setPreco(prod.preco.toString());
+    setRestauranteSelecionado(prod.restaurante_id);
     setEditandoProdId(prod.id);
-    setAbaAtiva('gerenciar');
+    setAbaAtiva('catalogo');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const cancelarEdicaoProd = () => {
-    setNomeProd(''); setPreco(''); setRestauranteSelecionado(''); setEditandoProdId(null);
+    setNomeProd('');
+    setPreco('');
+    setRestauranteSelecionado('');
+    setEditandoProdId(null);
   };
 
   // --- FUNÇÕES DE PEDIDO ---
   const handleAtualizarStatus = async (pedidoId, novoStatus) => {
     try {
-      const { error } = await supabase.from('pedidos').update({ status: novoStatus }).eq('id', pedidoId);
+      const { error } = await supabase
+        .from('pedidos')
+        .update({ status: novoStatus })
+        .eq('id', pedidoId);
       if (error) throw error;
       setPedidos(pedidos.map(p => p.id === pedidoId ? { ...p, status: novoStatus } : p));
       mostrarMensagem(`Pedido atualizado para: ${novoStatus}`, 'success');
@@ -192,8 +327,8 @@ function AdminDashboard({ onLogout }) {
   const getStatusBadge = (status) => {
     const styles = {
       'Aguardando': 'bg-amber-100 text-amber-800 border-amber-200',
-      'Em Preparação': 'bg-blue-100 text-blue-800 border-blue-200', // Ajustado para bater com o ClienteApp
-      'Em Trânsito': 'bg-purple-100 text-purple-800 border-purple-200', // Ajustado para bater com o ClienteApp
+      'Em Preparação': 'bg-blue-100 text-blue-800 border-blue-200',
+      'Em Trânsito': 'bg-purple-100 text-purple-800 border-purple-200',
       'Entregue': 'bg-green-100 text-green-800 border-green-200',
       'Cancelado': 'bg-red-100 text-red-800 border-red-200',
     };
@@ -216,18 +351,20 @@ function AdminDashboard({ onLogout }) {
         </div>
       </header>
 
-      {/* MENSAGEM TOAST LATERAL */}
+      {/* MENSAGEM TOAST */}
       {mensagem && (
         <div className="fixed top-20 right-4 z-50 animate-bounce-subtle">
-          <div className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg font-bold text-sm text-white ${tipoMensagem === 'success' ? 'bg-green-500' : tipoMensagem === 'error' ? 'bg-red-500' : 'bg-blue-500'
-            }`}>
+          <div className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg font-bold text-sm text-white ${
+            tipoMensagem === 'success' ? 'bg-green-500' : 
+            tipoMensagem === 'error' ? 'bg-red-500' : 'bg-blue-500'
+          }`}>
             {tipoMensagem === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
             {mensagem}
           </div>
         </div>
       )}
 
-      {/* NAVEGAÇÃO DE ABAS (Mobile e Desktop) */}
+      {/* NAVEGAÇÃO DE ABAS */}
       <div className="bg-white border-b sticky top-[60px] z-40">
         <div className="max-w-7xl mx-auto px-4 flex gap-6 overflow-x-auto scrollbar-hide">
           {[
@@ -240,204 +377,391 @@ function AdminDashboard({ onLogout }) {
             return (
               <button
                 key={tab.id}
-                onClick={() => setAbaAtiva(tab.id)}
-                className={`flex items-center gap-2 py-4 border-b-2 font-bold whitespace-nowrap transition-colors ${isActive ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-800'
-                  }`}
+                onClick={() => {
+                  setAbaAtiva(tab.id);
+                  setShowFormulario(false);
+                  cancelarEdicaoRest();
+                }}
+                className={`flex items-center gap-2 py-4 border-b-2 font-bold whitespace-nowrap transition-colors ${
+                  isActive ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
               >
                 <Icon size={18} /> {tab.label}
               </button>
-            )
+            );
           })}
         </div>
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
-          {/* COLUNA ESQUERDA: FORMULÁRIOS (Sempre visível no Desktop, ou se Aba Gerenciar no Mobile) */}
-          <div className={`lg:col-span-4 space-y-6 ${abaAtiva === 'gerenciar' ? 'block' : 'hidden lg:block'}`}>
-
-            {/* FORMULÁRIO DE LOJA */}
-            <div className={`bg-white rounded-2xl p-6 border shadow-sm ${editandoRestId ? 'border-amber-400 ring-4 ring-amber-50' : 'border-gray-100'}`}>
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
-                  <Store size={20} className={editandoRestId ? 'text-amber-500' : 'text-gray-400'} />
-                  {editandoRestId ? 'Editando Loja' : 'Nova Loja'}
-                </h2>
-                {editandoRestId && (
-                  <button onClick={cancelarEdicaoRest} className="p-1 hover:bg-gray-100 rounded-full text-gray-500"><X size={18} /></button>
-                )}
+        
+        {/* ABA: PEDIDOS ATIVOS */}
+        {abaAtiva === 'pedidos' && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-black text-gray-800">Pedidos em andamento</h2>
+            {pedidos.filter(p => p.status !== 'Entregue' && p.status !== 'Cancelado').length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 p-10 flex flex-col items-center justify-center text-gray-400">
+                <Clock size={48} className="mb-4 opacity-50" />
+                <p className="font-medium text-lg">Nenhum pedido ativo no momento.</p>
               </div>
+            ) : (
+              pedidos.filter(p => p.status !== 'Entregue' && p.status !== 'Cancelado').map(ped => {
+                const loja = restaurantes.find(r => r.id === ped.restaurante_id);
+                return (
+                  <div key={ped.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 pb-4 border-b border-gray-50">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-wider border ${getStatusBadge(ped.status)}`}>
+                            {ped.status}
+                          </span>
+                          <span className="text-sm font-bold text-gray-400">#{ped.id.toString().slice(0, 8)}</span>
+                        </div>
+                        <h3 className="font-black text-lg text-gray-800">{ped.cliente_nome}</h3>
+                        <p className="text-sm text-gray-500 flex items-center gap-1">
+                          <MapPin size={12} /> {loja?.nome || 'Loja Excluída'}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Entrega: {ped.endereco}
+                        </p>
+                      </div>
+                      <div className="text-left sm:text-right">
+                        <p className="text-xs text-gray-400 uppercase font-bold mb-1">
+                          {ped.tipo_entrega} • {ped.forma_pagamento}
+                        </p>
+                        <p className="text-2xl font-black text-green-600">R$ {ped.total?.toFixed(2)}</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          PIN: {ped.pin_entrega}
+                        </p>
+                      </div>
+                    </div>
 
-              <form onSubmit={handleSalvarRestaurante} className="space-y-3">
-                <input type="text" value={nomeRest} onChange={(e) => setNomeRest(e.target.value)} placeholder="Nome da Loja" required
-                  className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all" />
-                <input type="text" value={cnpj} onChange={(e) => setCnpj(e.target.value)} placeholder="CNPJ (Ex: 00.000.000/0000-00)" required
-                  className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all" />
-                <div className="relative">
-                  <MapPin size={18} className="absolute left-3 top-3.5 text-gray-400" />
-                  <input type="text" value={endereco} onChange={(e) => setEndereco(e.target.value)} placeholder="Endereço Completo com Número" required
-                    className="w-full bg-gray-50 pl-10 pr-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all" />
-                </div>
-                <button type="submit" className={`w-full text-white font-bold py-3 rounded-xl transition-all active:scale-95 ${editandoRestId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-900 hover:bg-black'}`}>
-                  {editandoRestId ? 'Atualizar Loja' : 'Salvar Loja'}
-                </button>
-              </form>
-            </div>
-
-            {/* FORMULÁRIO DE PRODUTO */}
-            <div className={`bg-white rounded-2xl p-6 border shadow-sm ${editandoProdId ? 'border-amber-400 ring-4 ring-amber-50' : 'border-gray-100'}`}>
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
-                  <Package size={20} className={editandoProdId ? 'text-amber-500' : 'text-gray-400'} />
-                  {editandoProdId ? 'Editando Produto' : 'Novo Produto'}
-                </h2>
-                {editandoProdId && (
-                  <button onClick={cancelarEdicaoProd} className="p-1 hover:bg-gray-100 rounded-full text-gray-500"><X size={18} /></button>
-                )}
-              </div>
-
-              <form onSubmit={handleSalvarProduto} className="space-y-3">
-                <select value={restauranteSelecionado} onChange={(e) => setRestauranteSelecionado(e.target.value)} required
-                  className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all text-gray-700">
-                  <option value="">Vincular à Loja...</option>
-                  {restaurantes.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
-                </select>
-                <input type="text" value={nomeProd} onChange={(e) => setNomeProd(e.target.value)} placeholder="Ex: Hambúrguer Duplo" required
-                  className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all" />
-                <div className="relative">
-                  <span className="absolute left-4 top-3.5 text-gray-500 font-bold">R$</span>
-                  <input type="number" step="0.01" value={preco} onChange={(e) => setPreco(e.target.value)} placeholder="0.00" required
-                    className="w-full bg-gray-50 pl-11 pr-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500 transition-all" />
-                </div>
-                <button type="submit" className={`w-full text-white font-bold py-3 rounded-xl transition-all active:scale-95 ${editandoProdId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-900 hover:bg-black'}`}>
-                  {editandoProdId ? 'Atualizar Produto' : 'Adicionar Produto'}
-                </button>
-              </form>
-            </div>
-          </div>
-
-          {/* COLUNA DIREITA: CONTEÚDO (Pedidos ou Catálogo) */}
-          <div className="lg:col-span-8">
-
-            {/* VIZUALIZAÇÃO: PEDIDOS */}
-            {abaAtiva === 'pedidos' && (
-              <div className="space-y-4">
-                {pedidos.length === 0 ? (
-                  <div className="bg-white rounded-2xl border border-gray-100 p-10 flex flex-col items-center justify-center text-gray-400">
-                    <Clock size={48} className="mb-4 opacity-50" />
-                    <p className="font-medium text-lg">Nenhum pedido no momento.</p>
+                    <div className="flex flex-wrap gap-2">
+                      {ped.status === 'Aguardando' && (
+                        <button onClick={() => handleAtualizarStatus(ped.id, 'Em Preparação')} 
+                          className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
+                          Aceitar e Preparar
+                        </button>
+                      )}
+                      {ped.status === 'Em Preparação' && (
+                        <button onClick={() => handleAtualizarStatus(ped.id, 'Em Trânsito')} 
+                          className="flex-1 sm:flex-none bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
+                          Despachar Pedido
+                        </button>
+                      )}
+                      {ped.status === 'Em Trânsito' && (
+                        <button onClick={() => handleAtualizarStatus(ped.id, 'Entregue')} 
+                          className="flex-1 sm:flex-none bg-green-500 hover:bg-green-600 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
+                          Confirmar Entrega
+                        </button>
+                      )}
+                      {(ped.status !== 'Entregue' && ped.status !== 'Cancelado') && (
+                        <button onClick={() => { if (window.confirm('Cancelar este pedido?')) handleAtualizarStatus(ped.id, 'Cancelado'); }} 
+                          className="flex-1 sm:flex-none bg-white border-2 border-red-100 text-red-600 hover:bg-red-50 font-bold py-2 px-6 rounded-xl active:scale-95 transition-all">
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  pedidos.map(ped => {
-                    const loja = restaurantes.find(r => r.id === ped.restaurante_id);
-                    return (
-                      <div key={ped.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 pb-4 border-b border-gray-50">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-wider border ${getStatusBadge(ped.status)}`}>
-                                {ped.status}
-                              </span>
-                              <span className="text-sm font-bold text-gray-400">#{ped.id.toString().slice(0, 6)}</span>
-                            </div>
-                            <h3 className="font-black text-lg text-gray-800">{ped.cliente_nome}</h3>
-                            <p className="text-sm text-gray-500 flex items-center gap-1"><MapPin size={12} /> {loja?.nome || 'Loja Excluída'}</p>
-                          </div>
-                          <div className="text-left sm:text-right">
-                            <p className="text-xs text-gray-400 uppercase font-bold mb-1">{ped.tipo_entrega} • {ped.forma_pagamento}</p>
-                            <p className="text-2xl font-black text-green-600">R$ {ped.total?.toFixed(2)}</p>
-                          </div>
-                        </div>
-
-                        {/* Ações Rápidas do Pedido */}
-                        <div className="flex flex-wrap gap-2">
-                          {ped.status === 'Aguardando' && (
-                            <button onClick={() => handleAtualizarStatus(ped.id, 'Em Preparação')} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
-                              Aceitar e Preparar
-                            </button>
-                          )}
-                          {ped.status === 'Em Preparação' && (
-                            <button onClick={() => handleAtualizarStatus(ped.id, 'Em Trânsito')} className="flex-1 sm:flex-none bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
-                              Despachar Pedido
-                            </button>
-                          )}
-                          {ped.status === 'Em Trânsito' && (
-                            <button onClick={() => handleAtualizarStatus(ped.id, 'Entregue')} className="flex-1 sm:flex-none bg-green-500 hover:bg-green-600 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
-                              Confirmar Entrega
-                            </button>
-                          )}
-                          {(ped.status !== 'Entregue' && ped.status !== 'Cancelado') && (
-                            <button onClick={() => { if (window.confirm('Cancelar este pedido?')) handleAtualizarStatus(ped.id, 'Cancelado') }} className="flex-1 sm:flex-none bg-white border-2 border-red-100 text-red-600 hover:bg-red-50 font-bold py-2 px-6 rounded-xl active:scale-95 transition-all">
-                              Cancelar
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-
-            {/* VIZUALIZAÇÃO: CATÁLOGO */}
-            {abaAtiva === 'catalogo' && (
-              <div className="space-y-6">
-                {restaurantes.length === 0 ? (
-                  <p className="text-center text-gray-400 py-10 font-medium">Cadastre uma loja primeiro.</p>
-                ) : (
-                  restaurantes.map(rest => {
-                    const produtosDaLoja = produtos.filter(p => p.restaurante_id === rest.id);
-                    return (
-                      <div key={rest.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="bg-gray-50 p-5 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                          <div>
-                            <h3 className="font-black text-xl text-gray-800">{rest.nome}</h3>
-                            <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin size={14} /> {rest.endereco}</p>
-                            <p className="text-xs text-gray-400 mt-1">CNPJ: {rest.cnpj}</p>
-                          </div>
-                          <div className="flex gap-2 w-full sm:w-auto">
-                            <button onClick={() => prepararEdicaoRestaurante(rest)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-bold text-sm transition-colors">
-                              <Edit2 size={16} /> Editar
-                            </button>
-                            <button onClick={() => handleExcluirRestaurante(rest.id, rest.nome)} className="flex-1 sm:flex-none flex items-center justify-center px-4 py-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 font-bold transition-colors">
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="p-5">
-                          {produtosDaLoja.length === 0 ? (
-                            <p className="text-sm text-gray-400 italic">Nenhum produto cadastrado nesta loja.</p>
-                          ) : (
-                            <div className="divide-y divide-gray-50">
-                              {produtosDaLoja.map(prod => (
-                                <div key={prod.id} className="py-3 flex justify-between items-center group">
-                                  <div>
-                                    <p className="font-bold text-gray-800">{prod.nome}</p>
-                                    <p className="text-green-600 font-black text-sm">R$ {Number(prod.preco).toFixed(2)}</p>
-                                  </div>
-                                  <div className="flex gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => prepararEdicaoProduto(prod)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                      <Edit2 size={18} />
-                                    </button>
-                                    <button onClick={() => handleExcluirProduto(prod.id, prod.nome)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                      <Trash2 size={18} />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                );
+              })
             )}
           </div>
-        </div>
+        )}
+
+        {/* ABA: MEU CATÁLOGO */}
+        {abaAtiva === 'catalogo' && (
+          <div className="space-y-6">
+            {/* Formulário de Produto */}
+            {(editandoProdId || showFormulario) && (
+              <div className="bg-white rounded-2xl p-6 border border-amber-400 shadow-lg mb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                    <Package size={20} className="text-amber-500" />
+                    {editandoProdId ? 'Editando Produto' : 'Novo Produto'}
+                  </h2>
+                  <button onClick={() => { cancelarEdicaoProd(); setShowFormulario(false); }} 
+                    className="p-1 hover:bg-gray-100 rounded-full text-gray-500">
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSalvarProduto} className="space-y-3">
+                  <select 
+                    value={restauranteSelecionado} 
+                    onChange={(e) => setRestauranteSelecionado(e.target.value)} 
+                    required
+                    className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500">
+                    <option value="">Selecione a loja...</option>
+                    {restaurantes.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
+                  </select>
+                  <input 
+                    type="text" 
+                    value={nomeProd} 
+                    onChange={(e) => setNomeProd(e.target.value)} 
+                    placeholder="Nome do produto" 
+                    required
+                    className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" 
+                  />
+                  <div className="relative">
+                    <span className="absolute left-4 top-3.5 text-gray-500 font-bold">R$</span>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={preco} 
+                      onChange={(e) => setPreco(e.target.value)} 
+                      placeholder="0.00" 
+                      required
+                      className="w-full bg-gray-50 pl-11 pr-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" 
+                    />
+                  </div>
+                  <button type="submit" className="w-full bg-gray-900 hover:bg-black text-white font-bold py-3 rounded-xl transition-all active:scale-95">
+                    {editandoProdId ? 'Atualizar Produto' : 'Adicionar Produto'}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* Lista de Restaurantes com Produtos */}
+            {restaurantes.length === 0 ? (
+              <div className="bg-white rounded-2xl p-10 text-center text-gray-400">
+                <Store size={48} className="mx-auto mb-4 opacity-50" />
+                <p>Nenhuma loja cadastrada.</p>
+                <p className="text-sm">Vá para "Gerenciar Lojas" para cadastrar.</p>
+              </div>
+            ) : (
+              restaurantes.map(rest => {
+                const produtosDaLoja = produtos.filter(p => p.restaurante_id === rest.id);
+                return (
+                  <div key={rest.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="bg-gray-50 p-5 border-b border-gray-100">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-black text-xl text-gray-800">{rest.nome}</h3>
+                          <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                            <MapPin size={14} /> {rest.endereco}
+                          </p>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            setShowFormulario(true);
+                            setRestauranteSelecionado(rest.id);
+                            cancelarEdicaoProd();
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition-colors"
+                        >
+                          <PlusCircle size={16} /> Adicionar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-5">
+                      {produtosDaLoja.length === 0 ? (
+                        <p className="text-sm text-gray-400 italic text-center py-4">Nenhum produto cadastrado.</p>
+                      ) : (
+                        <div className="divide-y divide-gray-50">
+                          {produtosDaLoja.map(prod => (
+                            <div key={prod.id} className="py-3 flex justify-between items-center group">
+                              <div>
+                                <p className="font-bold text-gray-800">{prod.nome}</p>
+                                <p className="text-green-600 font-black text-sm">R$ {Number(prod.preco).toFixed(2)}</p>
+                              </div>
+                              <div className="flex gap-1">
+                                <button 
+                                  onClick={() => prepararEdicaoProduto(prod)} 
+                                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="Editar"
+                                >
+                                  <Edit2 size={18} />
+                                </button>
+                                <button 
+                                  onClick={() => handleExcluirProduto(prod.id, prod.nome)} 
+                                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Excluir"
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* ABA: GERENCIAR LOJAS */}
+        {abaAtiva === 'gerenciar' && (
+          <div className="space-y-6">
+            {/* Botão para nova loja */}
+            <div className="flex justify-end">
+              <button 
+                onClick={() => {
+                  cancelarEdicaoRest();
+                  setShowFormulario(true);
+                }}
+                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold transition-colors"
+              >
+                <PlusCircle size={18} /> Nova Loja
+              </button>
+            </div>
+
+            {/* Formulário de Loja com Mapa */}
+            {(editandoRestId || showFormulario) && (
+              <div className="bg-white rounded-2xl p-6 border border-amber-400 shadow-lg">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                    <Store size={20} className="text-amber-500" />
+                    {editandoRestId ? 'Editando Loja' : 'Nova Loja'}
+                  </h2>
+                  <button 
+                    onClick={() => { cancelarEdicaoRest(); setShowFormulario(false); }} 
+                    className="p-1 hover:bg-gray-100 rounded-full text-gray-500"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSalvarRestaurante} className="space-y-3">
+                  <input 
+                    type="text" 
+                    value={nomeRest} 
+                    onChange={(e) => setNomeRest(e.target.value)} 
+                    placeholder="Nome da Loja" 
+                    required
+                    className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" 
+                  />
+                  <input 
+                    type="text" 
+                    value={cnpj} 
+                    onChange={(e) => setCnpj(e.target.value)} 
+                    placeholder="CNPJ" 
+                    required
+                    className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" 
+                  />
+                  
+                  {/* Campo de Endereço com Botão Buscar */}
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <MapPin size={18} className="absolute left-3 top-3.5 text-gray-400" />
+                      <input 
+                        type="text" 
+                        value={endereco} 
+                        onChange={(e) => setEndereco(e.target.value)} 
+                        placeholder="Endereço completo (Rua, número, bairro, cidade)" 
+                        required
+                        className="w-full bg-gray-50 pl-10 pr-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" 
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={buscarCoordenadas}
+                      disabled={buscandoCoordenadas}
+                      className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors whitespace-nowrap disabled:opacity-50"
+                    >
+                      {buscandoCoordenadas ? 'Buscando...' : 'Buscar Mapa'}
+                    </button>
+                  </div>
+                  
+                  {/* Exibição das Coordenadas */}
+                  {(latitude && longitude) && (
+                    <div className="bg-green-50 p-3 rounded-xl text-sm text-green-700">
+                      📍 Coordenadas: {latitude}, {longitude}
+                    </div>
+                  )}
+                  
+                  {/* Mapa de Visualização */}
+                  <div className="mt-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Visualização no mapa:</label>
+                    <MapaLocalizacao 
+                      latitude={latitude} 
+                      longitude={longitude} 
+                      endereco={endereco}
+                      nome={nomeRest || 'Nova Loja'}
+                    />
+                  </div>
+                  
+                  <button type="submit" className={`w-full text-white font-bold py-3 rounded-xl transition-all active:scale-95 ${
+                    editandoRestId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-900 hover:bg-black'
+                  }`}>
+                    {editandoRestId ? 'Atualizar Loja' : 'Salvar Loja'}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* Lista de Lojas com Mapa */}
+            <div className="space-y-3">
+              <h2 className="text-lg font-black text-gray-800">Minhas Lojas</h2>
+              {restaurantes.length === 0 ? (
+                <div className="bg-white rounded-2xl p-10 text-center text-gray-400 border border-gray-100">
+                  <Store size={48} className="mx-auto mb-4 opacity-50" />
+                  <p>Nenhuma loja cadastrada.</p>
+                  <p className="text-sm">Clique em "Nova Loja" para começar.</p>
+                </div>
+              ) : (
+                restaurantes.map(rest => (
+                  <div key={rest.id} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <h3 className="font-black text-lg text-gray-800">{rest.nome}</h3>
+                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                          <MapPin size={14} /> {rest.endereco}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">CNPJ: {rest.cnpj}</p>
+                        {rest.latitude && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            📍 {rest.latitude}, {rest.longitude}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => prepararEdicaoRestaurante(rest)} 
+                          className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-bold text-sm transition-colors"
+                          title="Editar"
+                        >
+                          <Edit2 size={16} /> Editar
+                        </button>
+                        <button 
+                          onClick={() => handleExcluirRestaurante(rest.id, rest.nome)} 
+                          className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-bold text-sm transition-colors"
+                          title="Excluir"
+                        >
+                          <Trash2 size={16} /> Excluir
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Mapa da Loja */}
+                    <div className="mt-3">
+                      <MapaLocalizacao 
+                        latitude={rest.latitude} 
+                        longitude={rest.longitude} 
+                        endereco={rest.endereco}
+                        nome={rest.nome}
+                      />
+                    </div>
+                    
+                    {/* Estatísticas rápidas */}
+                    <div className="mt-3 pt-3 border-t border-gray-50 flex gap-4 text-xs">
+                      <span className="text-gray-500">
+                        📦 {produtos.filter(p => p.restaurante_id === rest.id).length} produtos
+                      </span>
+                      <span className="text-gray-500">
+                        🛒 {pedidos.filter(p => p.restaurante_id === rest.id && p.status !== 'Entregue').length} pedidos ativos
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
