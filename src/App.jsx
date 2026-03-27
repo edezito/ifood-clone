@@ -1,7 +1,6 @@
 // ============================================================
-// App.jsx — Ponto de entrada da aplicação
-// Responsabilidade: roteamento entre as telas principais.
-// Não contém lógica de negócio nem chamadas a APIs.
+// App.jsx — FoodExpress (iFood Clone)
+// Roteamento entre as telas principais.
 // ============================================================
 import { useState } from 'react';
 import { AuthModel } from './models/authModel'; 
@@ -18,23 +17,20 @@ function App() {
     setAdminLogado(false);
   };
 
-  // 1. Modo cliente (app de delivery)
   if (modoCliente) {
     return <ClienteApp onLogout={() => setModoCliente(false)} />;
   }
 
-  // 2. Admin autenticado → painel
   if (adminLogado) {
     return <AdminDashboard onLogout={handleLogoutAdmin} />;
   }
 
-  // 3. Tela de login do admin com botão "Entrar como Cliente"
   return (
     <div>
       <LoginAdmin onLoginSucesso={() => setAdminLogado(true)} />
 
       <div style={clienteBtnWrapper}>
-        <p style={{ margin: '0 0 10px 0', fontSize: '0.9rem', color: '#64748b' }}>
+        <p style={{ margin: '0 0 10px 0', fontSize: '0.9rem', color: '#6b7280' }}>
           Apenas querendo pedir comida?
         </p>
         <button onClick={() => setModoCliente(true)} style={clienteBtn}>
@@ -45,7 +41,6 @@ function App() {
   );
 }
 
-// Estilos inline simples para o botão de acesso como cliente
 const clienteBtnWrapper = {
   position: 'fixed',
   bottom: '2rem',
@@ -55,22 +50,24 @@ const clienteBtnWrapper = {
   zIndex: 100,
   background: 'white',
   padding: '1rem 1.5rem',
-  borderRadius: '1.25rem',
-  boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-  border: '1px solid #e2e8f0',
+  borderRadius: '1rem',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+  border: '1px solid #e5e7eb',
   minWidth: '260px',
 };
 
 const clienteBtn = {
-  background: '#10b981',
+  background: '#EA1D2C',
   color: 'white',
   border: 'none',
   width: '100%',
   padding: '0.75rem 1rem',
   borderRadius: '0.75rem',
-  fontWeight: '600',
+  fontWeight: '700',
   fontSize: '1rem',
   cursor: 'pointer',
+  boxShadow: '0 4px 12px rgba(234,29,44,0.3)',
+  fontFamily: 'DM Sans, sans-serif',
 };
 
 export default App;

@@ -1,7 +1,7 @@
 // ============================================================
-// VIEW: AdminDashboard
-// Responsabilidade: renderização do painel administrativo.
-// Toda a lógica foi movida para useAdminController.
+// VIEW: AdminDashboard â€” FoodExpress (iFood Clone)
+// Design: Dark sidebar + clean card-based layout
+// Paleta: Vermelho iFood #EA1D2C / Branco
 // ============================================================
 import React from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
@@ -10,10 +10,11 @@ import 'leaflet/dist/leaflet.css';
 import {
   Store, ShoppingBag, Package, MapPin, Edit2, Trash2,
   CheckCircle, Clock, X, PlusCircle, AlertCircle, LogOut,
+  ChevronRight, Flame, TrendingUp, Users, Zap,
 } from 'lucide-react';
 import { useAdminController } from '../controllers/useAdminController';
 
-// Corrige ícone padrão do Leaflet no React
+// Leaflet fix
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -21,312 +22,679 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// ---- Sub-componente: Mapa ----
+/* â”€â”€â”€ Estilos globais â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+const STYLES = `
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800;900&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+:root {
+  --primary:     #EA1D2C;
+  --primary-dark:#C8101E;
+  --dark-bg:   #2B1A1A;
+  --primary-light:#FFF0F0;
+  --green:    #50A773;
+  --blue:     #3B82F6;
+  --yellow:   #F59E0B;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'DM Sans', sans-serif; background:#fafafa; color:#1f2937; }
+
+.admin-input {
+  width:100%; padding:12px 14px;
+  border:1.5px solid #e5e7eb; border-radius:12px;
+  background:#fff; font-family:'DM Sans',sans-serif; font-size:14px;
+  color:#1f2937; outline:none;
+  transition:border-color 0.2s, box-shadow 0.2s;
+}
+.admin-input:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(255,107,0,0.10); }
+.admin-input::placeholder { color:#9ca3af; }
+
+@keyframes slideIn {
+  from { opacity:0; transform:translateY(12px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes popIn {
+  0%   { transform:scale(0.85); opacity:0; }
+  70%  { transform:scale(1.03); }
+  100% { transform:scale(1); opacity:1; }
+}
+.slide-in { animation:slideIn 0.3s ease-out; }
+`;
+
+/* â”€â”€â”€ Mapa â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const MapaLocalizacao = ({ latitude, longitude, endereco, nome }) => {
   if (!latitude || !longitude) {
     return (
-      <div className="bg-gray-100 rounded-xl p-4 text-center text-gray-500 text-sm">
-        <MapPin size={20} className="mx-auto mb-2 text-gray-400" />
-        Localização não disponível
-        <p className="text-xs mt-1">Atualize o endereço para gerar as coordenadas</p>
+      <div style={{
+        background: '#f9fafb', borderRadius: 12, padding: 16,
+        textAlign: 'center', color: '#9ca3af', fontSize: 13,
+        border: '1.5px dashed #d1d5db',
+      }}>
+        <MapPin size={18} style={{ marginBottom: 6, opacity: 0.5, display: 'block', margin: '0 auto 6px' }} />
+        LocalizaÃ§Ã£o nÃ£o disponÃ­vel
+        <p style={{ fontSize: 11, marginTop: 4, opacity: 0.7 }}>Atualize o endereÃ§o para exibir o mapa</p>
       </div>
     );
   }
   const position = [parseFloat(latitude), parseFloat(longitude)];
   return (
-    <div className="rounded-xl overflow-hidden border border-gray-200">
-      <MapContainer center={position} zoom={15} style={{ height: '200px', width: '100%' }} scrollWheelZoom={false}>
+    <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
+      <MapContainer center={position} zoom={15} style={{ height: 180, width: '100%' }} scrollWheelZoom={false}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <Marker position={position}>
-          <Popup><div className="text-sm"><strong>{nome}</strong><br />{endereco}</div></Popup>
+          <Popup><div style={{ fontSize: 12 }}><strong>{nome}</strong><br />{endereco}</div></Popup>
         </Marker>
       </MapContainer>
     </div>
   );
 };
 
-// ---- Sub-componente: Badge de status ----
-const StatusBadge = ({ status }) => {
-  const estilos = {
-    Aguardando: 'bg-amber-100 text-amber-800 border-amber-200',
-    'Em Preparação': 'bg-blue-100 text-blue-800 border-blue-200',
-    'Em Trânsito': 'bg-purple-100 text-purple-800 border-purple-200',
-    Entregue: 'bg-green-100 text-green-800 border-green-200',
-    Cancelado: 'bg-red-100 text-red-800 border-red-200',
-  };
-  return (
-    <span className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-wider border ${estilos[status] ?? 'bg-gray-100 text-gray-800 border-gray-200'}`}>
-      {status}
-    </span>
-  );
+/* â”€â”€â”€ Status badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+const STATUS_CONFIG = {
+  Aguardando:      { bg: '#FFF7E0', color: '#B45309', dot: '#F59E0B', label: 'Aguardando' },
+  'Em PreparaÃ§Ã£o': { bg: '#EFF6FF', color: '#1D4ED8', dot: '#3B82F6', label: 'Preparando' },
+  'Em TrÃ¢nsito':   { bg: '#F5F3FF', color: '#6D28D9', dot: '#8B5CF6', label: 'A caminho' },
+  Entregue:        { bg: '#ECFDF5', color: '#065F46', dot: '#10B981', label: 'Entregue' },
+  Cancelado:       { bg: '#FEF2F2', color: '#991B1B', dot: '#EF4444', label: 'Cancelado' },
 };
 
-// ============================================================
-// VIEW PRINCIPAL
-// ============================================================
+function StatusBadge({ status }) {
+  const cfg = STATUS_CONFIG[status] ?? { bg: '#F3F4F6', color: '#374151', dot: '#9CA3AF', label: status };
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      background: cfg.bg, color: cfg.color,
+      padding: '4px 12px', borderRadius: 99,
+      fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+    }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: cfg.dot, flexShrink: 0 }} />
+      {cfg.label.toUpperCase()}
+    </span>
+  );
+}
+
+/* â”€â”€â”€ Stat Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function StatCard({ icon: Icon, value, label, color, bg }) {
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 16,
+      padding: '18px 20px',
+      border: '1px solid #e5e7eb',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+      display: 'flex', alignItems: 'center', gap: 14,
+    }}>
+      <div style={{
+        width: 44, height: 44, borderRadius: 12,
+        background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        <Icon size={20} color={color} />
+      </div>
+      <div>
+        <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 22, color: '#1f2937', lineHeight: 1 }}>{value}</p>
+        <p style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500, marginTop: 3, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{label}</p>
+      </div>
+    </div>
+  );
+}
+
+/* â”€â”€â”€ BotÃ£o de aÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function ActionButton({ children, onClick, variant = 'primary', size = 'md', style: extraStyle = {} }) {
+  const variants = {
+    primary: { background: 'var(--primary)', color: '#fff', boxShadow: '0 4px 12px rgba(255,107,0,0.3)' },
+    secondary: { background: '#f3f4f6', color: '#374151', boxShadow: 'none' },
+    ghost: { background: 'transparent', color: 'var(--primary)', border: '1.5px solid var(--primary)', boxShadow: 'none' },
+    danger: { background: '#FEF2F2', color: '#DC2626', boxShadow: 'none' },
+    success: { background: 'var(--green)', color: '#fff', boxShadow: '0 4px 12px rgba(16,185,129,0.3)' },
+    amber: { background: 'var(--yellow)', color: '#fff', boxShadow: '0 4px 12px rgba(245,158,11,0.3)' },
+  };
+  const sizes = {
+    sm: { padding: '7px 14px', fontSize: 12, borderRadius: 10 },
+    md: { padding: '10px 18px', fontSize: 13, borderRadius: 12 },
+    lg: { padding: '14px 24px', fontSize: 15, borderRadius: 14 },
+  };
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        border: 'none', cursor: 'pointer',
+        fontFamily: 'DM Sans, sans-serif', fontWeight: 700,
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        transition: 'transform 0.15s, box-shadow 0.15s',
+        ...variants[variant],
+        ...sizes[size],
+        ...extraStyle,
+      }}
+      onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+      onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* â”€â”€â”€ Card de pedido â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function PedidoCard({ ped, loja, onAtualizar }) {
+  return (
+    <div style={{
+      background: '#fff', borderRadius: 16,
+      border: '1px solid #e5e7eb',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+      overflow: 'hidden',
+      animation: 'slideIn 0.3s ease-out',
+    }}>
+      <div style={{
+        height: 3,
+        background: ped.status === 'Aguardando' ? '#F59E0B'
+          : ped.status === 'Em PreparaÃ§Ã£o' ? '#3B82F6'
+          : ped.status === 'Em TrÃ¢nsito' ? '#8B5CF6' : '#10B981',
+      }} />
+      <div style={{ padding: '18px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+              <StatusBadge status={ped.status} />
+              <span style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'monospace', fontWeight: 600 }}>
+                #{ped.id.toString().slice(0, 8)}
+              </span>
+            </div>
+            <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 17, color: '#1f2937' }}>
+              {ped.cliente_nome}
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, color: '#9ca3af', fontSize: 12 }}>
+              <MapPin size={11} />
+              <span>{loja?.nome ?? 'Loja excluÃ­da'}</span>
+            </div>
+            <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>
+              ðŸ“ {ped.endereco}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+              {ped.tipo_entrega}
+            </p>
+            <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 24, color: 'var(--green)' }}>
+              R$ {ped.total?.toFixed(2)}
+            </p>
+            <div style={{
+              background: 'var(--primary-light)', borderRadius: 8,
+              padding: '3px 10px', marginTop: 4, display: 'inline-block',
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', letterSpacing: '0.1em' }}>
+                PIN: {ped.pin_entrega}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+          {ped.status === 'Aguardando' && (
+            <ActionButton variant="primary" onClick={() => onAtualizar(ped.id, 'Em PreparaÃ§Ã£o')}>
+              <CheckCircle size={14} /> Aceitar Pedido
+            </ActionButton>
+          )}
+          {ped.status === 'Em PreparaÃ§Ã£o' && (
+            <ActionButton variant="amber" onClick={() => onAtualizar(ped.id, 'Em TrÃ¢nsito')}>
+              <Zap size={14} /> Despachar
+            </ActionButton>
+          )}
+          {ped.status === 'Em TrÃ¢nsito' && (
+            <ActionButton variant="success" onClick={() => onAtualizar(ped.id, 'Entregue')}>
+              <CheckCircle size={14} /> Confirmar Entrega
+            </ActionButton>
+          )}
+          <ActionButton variant="danger" onClick={() => { if (window.confirm('Cancelar este pedido?')) onAtualizar(ped.id, 'Cancelado'); }}>
+            <X size={14} /> Cancelar
+          </ActionButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* â”€â”€â”€ FormulÃ¡rio genÃ©rico â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+function FormField({ label, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+/* â”€â”€â”€ COMPONENTE PRINCIPAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function AdminDashboard({ onLogout }) {
   const ctrl = useAdminController();
 
+  const pedidosAtivos = ctrl.pedidos.filter(p => p.status !== 'Entregue' && p.status !== 'Cancelado');
+  const pedidosHoje = ctrl.pedidos.filter(p => p.status === 'Entregue').length;
+  const receitaTotal = ctrl.pedidos
+    .filter(p => p.status === 'Entregue')
+    .reduce((a, p) => a + (p.total ?? 0), 0);
+
   return (
-    <div className="min-h-screen bg-[#f8fafc] font-sans pb-20 lg:pb-0">
+    <>
+      <style>{STYLES}</style>
 
-      {/* Header */}
-      <header className="bg-red-600 text-white shadow-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Store className="w-6 h-6" />
-            <h1 className="text-xl font-bold tracking-tight">Portal do Parceiro</h1>
-          </div>
-          <button onClick={onLogout} className="flex items-center gap-2 bg-red-700 hover:bg-red-800 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
-            <LogOut size={16} /> <span className="hidden sm:inline">Sair</span>
-          </button>
-        </div>
-      </header>
+      <div style={{ display: 'flex', minHeight: '100vh', background: '#fafafa' }}>
 
-      {/* Toast */}
-      {ctrl.mensagem && (
-        <div className="fixed top-20 right-4 z-50">
-          <div className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg font-bold text-sm text-white ${ctrl.tipoMensagem === 'success' ? 'bg-green-500' : ctrl.tipoMensagem === 'error' ? 'bg-red-500' : 'bg-blue-500'}`}>
-            {ctrl.tipoMensagem === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
-            {ctrl.mensagem}
-          </div>
-        </div>
-      )}
-
-      {/* Abas */}
-      <div className="bg-white border-b sticky top-[60px] z-40">
-        <div className="max-w-7xl mx-auto px-4 flex gap-6 overflow-x-auto scrollbar-hide">
-          {[
-            { id: 'pedidos', label: 'Pedidos Ativos', icon: Package },
-            { id: 'catalogo', label: 'Meu Catálogo', icon: ShoppingBag },
-            { id: 'gerenciar', label: 'Gerenciar Lojas', icon: Store },
-          ].map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => { ctrl.setAbaAtiva(id); ctrl.setShowFormulario(false); ctrl.cancelarEdicaoRest(); }}
-              className={`flex items-center gap-2 py-4 border-b-2 font-bold whitespace-nowrap transition-colors ${ctrl.abaAtiva === id ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
-            >
-              <Icon size={18} /> {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <main className="max-w-7xl mx-auto px-4 py-6">
-
-        {/* ========== ABA: PEDIDOS ========== */}
-        {ctrl.abaAtiva === 'pedidos' && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-black text-gray-800">Pedidos em andamento</h2>
-            {ctrl.pedidos.filter(p => p.status !== 'Entregue' && p.status !== 'Cancelado').length === 0 ? (
-              <div className="bg-white rounded-2xl border border-gray-100 p-10 flex flex-col items-center justify-center text-gray-400">
-                <Clock size={48} className="mb-4 opacity-50" />
-                <p className="font-medium text-lg">Nenhum pedido ativo no momento.</p>
+        {/* â”€â”€ SIDEBAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        <aside style={{
+          width: 240, flexShrink: 0,
+          background: 'linear-gradient(180deg, #0f0f1a 0%, var(--primary-dark) 100%)',
+          display: 'flex', flexDirection: 'column',
+          padding: '28px 0',
+          position: 'sticky', top: 0, height: '100vh',
+        }}>
+          {/* Logo */}
+          <div style={{ padding: '0 24px 28px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 10,
+                background: 'var(--primary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{ fontSize: 18 }}>🍔</span>
               </div>
-            ) : (
-              ctrl.pedidos
-                .filter(p => p.status !== 'Entregue' && p.status !== 'Cancelado')
-                .map(ped => {
-                  const loja = ctrl.restaurantes.find(r => r.id === ped.restaurante_id);
-                  return (
-                    <div key={ped.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 pb-4 border-b border-gray-50">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <StatusBadge status={ped.status} />
-                            <span className="text-sm font-bold text-gray-400">#{ped.id.toString().slice(0, 8)}</span>
-                          </div>
-                          <h3 className="font-black text-lg text-gray-800">{ped.cliente_nome}</h3>
-                          <p className="text-sm text-gray-500 flex items-center gap-1">
-                            <MapPin size={12} /> {loja?.nome ?? 'Loja Excluída'}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-1">Entrega: {ped.endereco}</p>
-                        </div>
-                        <div className="text-left sm:text-right">
-                          <p className="text-xs text-gray-400 uppercase font-bold mb-1">{ped.tipo_entrega} • {ped.forma_pagamento}</p>
-                          <p className="text-2xl font-black text-green-600">R$ {ped.total?.toFixed(2)}</p>
-                          <p className="text-xs text-gray-400 mt-1">PIN: {ped.pin_entrega}</p>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {ped.status === 'Aguardando' && (
-                          <button onClick={() => ctrl.atualizarStatusPedido(ped.id, 'Em Preparação')} className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition-all active:scale-95">Aceitar e Preparar</button>
-                        )}
-                        {ped.status === 'Em Preparação' && (
-                          <button onClick={() => ctrl.atualizarStatusPedido(ped.id, 'Em Trânsito')} className="flex-1 sm:flex-none bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-6 rounded-xl transition-all active:scale-95">Despachar Pedido</button>
-                        )}
-                        {ped.status === 'Em Trânsito' && (
-                          <button onClick={() => ctrl.atualizarStatusPedido(ped.id, 'Entregue')} className="flex-1 sm:flex-none bg-green-500 hover:bg-green-600 text-white font-bold py-2.5 px-6 rounded-xl transition-all active:scale-95">Confirmar Entrega</button>
-                        )}
-                        <button onClick={() => { if (window.confirm('Cancelar este pedido?')) ctrl.atualizarStatusPedido(ped.id, 'Cancelado'); }} className="flex-1 sm:flex-none bg-white border-2 border-red-100 text-red-600 hover:bg-red-50 font-bold py-2 px-6 rounded-xl transition-all active:scale-95">Cancelar</button>
-                      </div>
-                    </div>
-                  );
-                })
-            )}
+              <div>
+                <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 16, color: '#fff', lineHeight: 1 }}>
+                  Food<span style={{ color: 'var(--primary)' }}>Express</span>
+                </p>
+                <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontWeight: 500, letterSpacing: '0.06em', marginTop: 2 }}>
+                  PORTAL PARCEIRO
+                </p>
+              </div>
+            </div>
           </div>
-        )}
 
-        {/* ========== ABA: CATÁLOGO ========== */}
-        {ctrl.abaAtiva === 'catalogo' && (
-          <div className="space-y-6">
-            {(ctrl.editandoProdId || ctrl.showFormulario) && (
-              <div className="bg-white rounded-2xl p-6 border border-amber-400 shadow-lg mb-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
-                    <Package size={20} className="text-amber-500" />
-                    {ctrl.editandoProdId ? 'Editando Produto' : 'Novo Produto'}
-                  </h2>
-                  <button onClick={() => { ctrl.cancelarEdicaoProd(); ctrl.setShowFormulario(false); }} className="p-1 hover:bg-gray-100 rounded-full text-gray-500"><X size={18} /></button>
-                </div>
-                <form onSubmit={ctrl.salvarProduto} className="space-y-3">
-                  <select value={ctrl.restauranteSelecionado} onChange={e => ctrl.setRestauranteSelecionado(e.target.value)} required className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500">
-                    <option value="">Selecione a loja...</option>
-                    {ctrl.restaurantes.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
-                  </select>
-                  <input type="text" value={ctrl.nomeProd} onChange={e => ctrl.setNomeProd(e.target.value)} placeholder="Nome do produto" required className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" />
-                  <div className="relative">
-                    <span className="absolute left-4 top-3.5 text-gray-500 font-bold">R$</span>
-                    <input type="number" step="0.01" value={ctrl.preco} onChange={e => ctrl.setPreco(e.target.value)} placeholder="0.00" required className="w-full bg-gray-50 pl-11 pr-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" />
+          {/* Nav items */}
+          <nav style={{ flex: 1, padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {[
+              { id: 'pedidos',   label: 'Pedidos Ativos', icon: Package,  badge: pedidosAtivos.length },
+              { id: 'catalogo',  label: 'Meu CatÃ¡logo',   icon: ShoppingBag },
+              { id: 'gerenciar', label: 'Gerenciar Lojas', icon: Store },
+            ].map(({ id, label, icon: Icon, badge }) => {
+              const active = ctrl.abaAtiva === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => { ctrl.setAbaAtiva(id); ctrl.setShowFormulario(false); ctrl.cancelarEdicaoRest(); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 12px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                    background: active ? 'rgba(255,107,0,0.15)' : 'transparent',
+                    color: active ? 'var(--primary)' : 'rgba(255,255,255,0.5)',
+                    fontFamily: 'DM Sans, sans-serif', fontWeight: active ? 700 : 500, fontSize: 14,
+                    transition: 'all 0.2s',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Icon size={17} />
+                    {label}
                   </div>
-                  <button type="submit" className="w-full bg-gray-900 hover:bg-black text-white font-bold py-3 rounded-xl transition-all active:scale-95">
-                    {ctrl.editandoProdId ? 'Atualizar Produto' : 'Adicionar Produto'}
-                  </button>
-                </form>
+                  {badge > 0 && (
+                    <span style={{
+                      background: 'var(--primary)', color: '#fff',
+                      fontSize: 10, fontWeight: 800,
+                      padding: '2px 7px', borderRadius: 99,
+                    }}>{badge}</span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Logout */}
+          <div style={{ padding: '0 12px' }}>
+            <button
+              onClick={onLogout}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 12px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                background: 'transparent',
+                color: 'rgba(255,255,255,0.35)',
+                width: '100%', fontFamily: 'DM Sans, sans-serif', fontWeight: 500, fontSize: 14,
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = '#fff'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; }}
+            >
+              <LogOut size={16} />
+              Sair da conta
+            </button>
+          </div>
+        </aside>
+
+        {/* â”€â”€ CONTEÃšDO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+
+          {/* Header */}
+          <header style={{
+            background: '#fff', borderBottom: '1px solid #e5e7eb',
+            padding: '18px 28px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            flexWrap: 'wrap', gap: 12,
+          }}>
+            <div>
+              <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 22, color: '#1f2937' }}>
+                {ctrl.abaAtiva === 'pedidos' ? 'ðŸš€ Pedidos Ativos'
+                  : ctrl.abaAtiva === 'catalogo' ? 'ðŸ›’ Meu CatÃ¡logo'
+                  : 'ðŸª Gerenciar Lojas'}
+              </p>
+              <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
+                {new Date().toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ background: 'var(--primary-light)', borderRadius: 12, padding: '8px 14px', textAlign: 'center' }}>
+                <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 18, color: 'var(--primary)' }}>{pedidosAtivos.length}</p>
+                <p style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, letterSpacing: '0.04em' }}>ATIVOS</p>
+              </div>
+              <div style={{ background: '#ECFDF5', borderRadius: 12, padding: '8px 14px', textAlign: 'center' }}>
+                <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 18, color: 'var(--green)' }}>{pedidosHoje}</p>
+                <p style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, letterSpacing: '0.04em' }}>ENTREGUES</p>
+              </div>
+              <div style={{ background: '#FFF7E0', borderRadius: 12, padding: '8px 14px', textAlign: 'center' }}>
+                <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 18, color: '#B45309' }}>R${receitaTotal.toFixed(0)}</p>
+                <p style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, letterSpacing: '0.04em' }}>RECEITA</p>
+              </div>
+            </div>
+          </header>
+
+          {/* Toast */}
+          {ctrl.mensagem && (
+            <div style={{
+              position: 'fixed', top: 20, right: 20, zIndex: 999,
+              background: ctrl.tipoMensagem === 'success' ? '#ECFDF5' : ctrl.tipoMensagem === 'error' ? '#FEF2F2' : '#EFF6FF',
+              color: ctrl.tipoMensagem === 'success' ? '#065F46' : ctrl.tipoMensagem === 'error' ? '#991B1B' : '#1D4ED8',
+              border: `1px solid ${ctrl.tipoMensagem === 'success' ? '#A7F3D0' : ctrl.tipoMensagem === 'error' ? '#FECACA' : '#BFDBFE'}`,
+              borderRadius: 14, padding: '12px 18px',
+              display: 'flex', alignItems: 'center', gap: 8,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+              fontWeight: 600, fontSize: 13,
+              animation: 'popIn 0.3s ease-out',
+              maxWidth: 320,
+            }}>
+              {ctrl.tipoMensagem === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+              {ctrl.mensagem}
+            </div>
+          )}
+
+          {/* â”€â”€ ConteÃºdo da aba â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          <main style={{ flex: 1, padding: '24px 28px', overflowY: 'auto' }}>
+
+            {/* ABA PEDIDOS */}
+            {ctrl.abaAtiva === 'pedidos' && (
+              <div style={{ maxWidth: 800 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14, marginBottom: 24 }}>
+                  <StatCard icon={Flame} value={pedidosAtivos.length} label="Pedidos Ativos" color="var(--primary)" bg="var(--primary-light)" />
+                  <StatCard icon={TrendingUp} value={`R$ ${receitaTotal.toFixed(0)}`} label="Receita Total" color="var(--green)" bg="#D1FAE5" />
+                  <StatCard icon={Users} value={ctrl.pedidos.length} label="Total de Pedidos" color="#3B82F6" bg="#EFF6FF" />
+                </div>
+                {pedidosAtivos.length === 0 ? (
+                  <div style={{
+                    background: '#fff', borderRadius: 16, padding: '48px 24px',
+                    textAlign: 'center', border: '1.5px dashed #d1d5db',
+                  }}>
+                    <p style={{ fontSize: 48, marginBottom: 12 }}>ðŸŽ‰</p>
+                    <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, color: '#1f2937' }}>
+                      Sem pedidos no momento
+                    </p>
+                    <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 6 }}>
+                      Quando chegar um pedido, aparece aqui!
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {pedidosAtivos.map(ped => (
+                      <PedidoCard
+                        key={ped.id}
+                        ped={ped}
+                        loja={ctrl.restaurantes.find(r => r.id === ped.restaurante_id)}
+                        onAtualizar={ctrl.atualizarStatusPedido}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
-            {ctrl.restaurantes.length === 0 ? (
-              <div className="bg-white rounded-2xl p-10 text-center text-gray-400">
-                <Store size={48} className="mx-auto mb-4 opacity-50" />
-                <p>Nenhuma loja cadastrada.</p>
-              </div>
-            ) : (
-              ctrl.restaurantes.map(rest => {
-                const produtosDaLoja = ctrl.produtos.filter(p => p.restaurante_id === rest.id);
-                return (
-                  <div key={rest.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="bg-gray-50 p-5 border-b border-gray-100">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-black text-xl text-gray-800">{rest.nome}</h3>
-                          <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin size={14} /> {rest.endereco}</p>
-                        </div>
-                        <button onClick={() => { ctrl.setShowFormulario(true); ctrl.setRestauranteSelecionado(rest.id); ctrl.cancelarEdicaoProd(); }} className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition-colors">
-                          <PlusCircle size={16} /> Adicionar
-                        </button>
-                      </div>
+            {/* ABA CATÃLOGO */}
+            {ctrl.abaAtiva === 'catalogo' && (
+              <div style={{ maxWidth: 800 }}>
+                {(ctrl.editandoProdId || ctrl.showFormulario) && (
+                  <div style={{
+                    background: '#fff', borderRadius: 16, padding: 24,
+                    border: '2px solid rgba(255,107,0,0.2)',
+                    boxShadow: '0 8px 24px rgba(255,107,0,0.08)',
+                    marginBottom: 24, animation: 'slideIn 0.3s ease-out',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                      <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 17, color: '#1f2937' }}>
+                        {ctrl.editandoProdId ? 'âœï¸ Editar Produto' : 'âž• Novo Produto'}
+                      </p>
+                      <button
+                        onClick={() => { ctrl.cancelarEdicaoProd(); ctrl.setShowFormulario(false); }}
+                        style={{
+                          width: 32, height: 32, borderRadius: 8, border: 'none',
+                          background: '#f3f4f6', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        <X size={15} color="#6b7280" />
+                      </button>
                     </div>
-                    <div className="p-5">
-                      {produtosDaLoja.length === 0 ? (
-                        <p className="text-sm text-gray-400 italic text-center py-4">Nenhum produto cadastrado.</p>
-                      ) : (
-                        <div className="divide-y divide-gray-50">
-                          {produtosDaLoja.map(prod => (
-                            <div key={prod.id} className="py-3 flex justify-between items-center group">
-                              <div>
-                                <p className="font-bold text-gray-800">{prod.nome}</p>
-                                <p className="text-green-600 font-black text-sm">R$ {Number(prod.preco).toFixed(2)}</p>
+                    <form onSubmit={ctrl.salvarProduto} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      <FormField label="Restaurante">
+                        <select value={ctrl.restauranteSelecionado} onChange={e => ctrl.setRestauranteSelecionado(e.target.value)} required className="admin-input">
+                          <option value="">Selecione a lojaâ€¦</option>
+                          {ctrl.restaurantes.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
+                        </select>
+                      </FormField>
+                      <FormField label="Nome do produto">
+                        <input className="admin-input" type="text" value={ctrl.nomeProd} onChange={e => ctrl.setNomeProd(e.target.value)} placeholder="Ex: X-Burguer Especial" required />
+                      </FormField>
+                      <FormField label="PreÃ§o (R$)">
+                        <div style={{ position: 'relative' }}>
+                          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14, fontWeight: 600 }}>R$</span>
+                          <input className="admin-input" type="number" step="0.01" value={ctrl.preco} onChange={e => ctrl.setPreco(e.target.value)} placeholder="0,00" required style={{ paddingLeft: 40 }} />
+                        </div>
+                      </FormField>
+                      <ActionButton variant={ctrl.editandoProdId ? 'amber' : 'primary'} size="lg" style={{ width: '100%', justifyContent: 'center' }}>
+                        {ctrl.editandoProdId ? 'Atualizar Produto' : 'Adicionar ao CardÃ¡pio'}
+                      </ActionButton>
+                    </form>
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {ctrl.restaurantes.map(rest => {
+                    const prods = ctrl.produtos.filter(p => p.restaurante_id === rest.id);
+                    return (
+                      <div key={rest.id} style={{
+                        background: '#fff', borderRadius: 16,
+                        border: '1px solid #e5e7eb',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                        overflow: 'hidden',
+                      }}>
+                        <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f3f4f6', flexWrap: 'wrap', gap: 10 }}>
+                          <div>
+                            <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 16, color: '#1f2937' }}>{rest.nome}</p>
+                            <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>{prods.length} produto(s)</p>
+                          </div>
+                          <ActionButton variant="primary" size="sm" onClick={() => { ctrl.setShowFormulario(true); ctrl.setRestauranteSelecionado(rest.id); ctrl.cancelarEdicaoProd(); }}>
+                            <PlusCircle size={13} /> Adicionar
+                          </ActionButton>
+                        </div>
+                        {prods.length === 0 ? (
+                          <p style={{ padding: 20, color: '#9ca3af', fontSize: 13, textAlign: 'center', fontStyle: 'italic' }}>
+                            Nenhum produto cadastrado.
+                          </p>
+                        ) : (
+                          <div>
+                            {prods.map((prod, i) => (
+                              <div key={prod.id} style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                padding: '14px 20px',
+                                borderBottom: i < prods.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                gap: 12,
+                              }}>
+                                <div style={{ flex: 1 }}>
+                                  <p style={{ fontWeight: 600, fontSize: 14, color: '#1f2937' }}>{prod.nome}</p>
+                                  <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 14, color: 'var(--green)', marginTop: 2 }}>
+                                    R$ {Number(prod.preco).toFixed(2)}
+                                  </p>
+                                </div>
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                  <ActionButton variant="secondary" size="sm" onClick={() => ctrl.prepararEdicaoProduto(prod)}>
+                                    <Edit2 size={12} /> Editar
+                                  </ActionButton>
+                                  <ActionButton variant="danger" size="sm" onClick={() => ctrl.excluirProduto(prod.id, prod.nome)}>
+                                    <Trash2 size={12} />
+                                  </ActionButton>
+                                </div>
                               </div>
-                              <div className="flex gap-1">
-                                <button onClick={() => ctrl.prepararEdicaoProduto(prod)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit2 size={18} /></button>
-                                <button onClick={() => ctrl.excluirProduto(prod.id, prod.nome)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Excluir"><Trash2 size={18} /></button>
-                              </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ABA GERENCIAR LOJAS */}
+            {ctrl.abaAtiva === 'gerenciar' && (
+              <div style={{ maxWidth: 800 }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
+                  <ActionButton variant="primary" size="md" onClick={() => { ctrl.cancelarEdicaoRest(); ctrl.setShowFormulario(true); }}>
+                    <PlusCircle size={15} /> Nova Loja
+                  </ActionButton>
+                </div>
+
+                {(ctrl.editandoRestId || ctrl.showFormulario) && (
+                  <div style={{
+                    background: '#fff', borderRadius: 16, padding: 24,
+                    border: '2px solid rgba(255,107,0,0.2)',
+                    boxShadow: '0 8px 24px rgba(255,107,0,0.08)',
+                    marginBottom: 24, animation: 'slideIn 0.3s ease-out',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                      <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 17, color: '#1f2937' }}>
+                        {ctrl.editandoRestId ? 'âœï¸ Editar Loja' : 'ðŸª Nova Loja'}
+                      </p>
+                      <button
+                        onClick={() => { ctrl.cancelarEdicaoRest(); ctrl.setShowFormulario(false); }}
+                        style={{
+                          width: 32, height: 32, borderRadius: 8, border: 'none',
+                          background: '#f3f4f6', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        <X size={15} color="#6b7280" />
+                      </button>
+                    </div>
+                    <form onSubmit={ctrl.salvarRestaurante} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                        <FormField label="Nome da Loja">
+                          <input className="admin-input" type="text" value={ctrl.nomeRest} onChange={e => ctrl.setNomeRest(e.target.value)} placeholder="Ex: Burguer House" required />
+                        </FormField>
+                        <FormField label="CNPJ">
+                          <input className="admin-input" type="text" value={ctrl.cnpj} onChange={e => ctrl.setCnpj(e.target.value)} placeholder="00.000.000/0001-00" required />
+                        </FormField>
+                      </div>
+                      <FormField label="EndereÃ§o Completo">
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <div style={{ flex: 1, position: 'relative' }}>
+                            <MapPin size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+                            <input className="admin-input" type="text" value={ctrl.endereco} onChange={e => ctrl.setEndereco(e.target.value)} placeholder="Rua, nÃºmero, bairro, cidade" required style={{ paddingLeft: 34 }} />
+                          </div>
+                          <button
+                            type="button" onClick={ctrl.buscarCoordenadas} disabled={ctrl.buscandoCoordenadas}
+                            style={{
+                              padding: '12px 16px', borderRadius: 12, border: 'none',
+                              background: 'var(--primary-dark)', color: '#fff',
+                              fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                              whiteSpace: 'nowrap', flexShrink: 0,
+                              opacity: ctrl.buscandoCoordenadas ? 0.6 : 1,
+                            }}
+                          >
+                            {ctrl.buscandoCoordenadas ? 'â€¦' : 'ðŸ“ Mapa'}
+                          </button>
+                        </div>
+                      </FormField>
+                      {ctrl.latitude && ctrl.longitude && (
+                        <div style={{ background: '#ECFDF5', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#065F46', fontWeight: 600 }}>
+                          âœ… Coordenadas: {ctrl.latitude}, {ctrl.longitude}
                         </div>
                       )}
-                    </div>
+                      <MapaLocalizacao latitude={ctrl.latitude} longitude={ctrl.longitude} endereco={ctrl.endereco} nome={ctrl.nomeRest || 'Nova Loja'} />
+                      <ActionButton variant={ctrl.editandoRestId ? 'amber' : 'primary'} size="lg" style={{ width: '100%', justifyContent: 'center' }}>
+                        {ctrl.editandoRestId ? 'Salvar AlteraÃ§Ãµes' : 'Cadastrar Loja'}
+                      </ActionButton>
+                    </form>
                   </div>
-                );
-              })
-            )}
-          </div>
-        )}
+                )}
 
-        {/* ========== ABA: GERENCIAR LOJAS ========== */}
-        {ctrl.abaAtiva === 'gerenciar' && (
-          <div className="space-y-6">
-            <div className="flex justify-end">
-              <button onClick={() => { ctrl.cancelarEdicaoRest(); ctrl.setShowFormulario(true); }} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold transition-colors">
-                <PlusCircle size={18} /> Nova Loja
-              </button>
-            </div>
-
-            {(ctrl.editandoRestId || ctrl.showFormulario) && (
-              <div className="bg-white rounded-2xl p-6 border border-amber-400 shadow-lg">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
-                    <Store size={20} className="text-amber-500" />
-                    {ctrl.editandoRestId ? 'Editando Loja' : 'Nova Loja'}
-                  </h2>
-                  <button onClick={() => { ctrl.cancelarEdicaoRest(); ctrl.setShowFormulario(false); }} className="p-1 hover:bg-gray-100 rounded-full text-gray-500"><X size={18} /></button>
-                </div>
-                <form onSubmit={ctrl.salvarRestaurante} className="space-y-3">
-                  <input type="text" value={ctrl.nomeRest} onChange={e => ctrl.setNomeRest(e.target.value)} placeholder="Nome da Loja" required className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" />
-                  <input type="text" value={ctrl.cnpj} onChange={e => ctrl.setCnpj(e.target.value)} placeholder="CNPJ" required className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" />
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <MapPin size={18} className="absolute left-3 top-3.5 text-gray-400" />
-                      <input type="text" value={ctrl.endereco} onChange={e => ctrl.setEndereco(e.target.value)} placeholder="Endereço completo" required className="w-full bg-gray-50 pl-10 pr-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {ctrl.restaurantes.length === 0 ? (
+                    <div style={{
+                      background: '#fff', borderRadius: 16, padding: '48px 24px',
+                      textAlign: 'center', border: '1.5px dashed #d1d5db',
+                    }}>
+                      <p style={{ fontSize: 48, marginBottom: 12 }}>ðŸª</p>
+                      <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18 }}>Nenhuma loja cadastrada</p>
+                      <p style={{ fontSize: 13, color: '#9ca3af', marginTop: 6 }}>Clique em "Nova Loja" para comeÃ§ar</p>
                     </div>
-                    <button type="button" onClick={ctrl.buscarCoordenadas} disabled={ctrl.buscandoCoordenadas} className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors whitespace-nowrap disabled:opacity-50">
-                      {ctrl.buscandoCoordenadas ? 'Buscando...' : 'Buscar Mapa'}
-                    </button>
-                  </div>
-                  {ctrl.latitude && ctrl.longitude && (
-                    <div className="bg-green-50 p-3 rounded-xl text-sm text-green-700">📍 Coordenadas: {ctrl.latitude}, {ctrl.longitude}</div>
+                  ) : (
+                    ctrl.restaurantes.map(rest => (
+                      <div key={rest.id} style={{
+                        background: '#fff', borderRadius: 16,
+                        border: '1px solid #e5e7eb',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                        overflow: 'hidden',
+                      }}>
+                        <div style={{ padding: '18px 20px' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+                            <div style={{ flex: 1 }}>
+                              <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, color: '#1f2937' }}>{rest.nome}</p>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, color: '#9ca3af', fontSize: 12 }}>
+                                <MapPin size={12} /> {rest.endereco}
+                              </div>
+                              <p style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>CNPJ: {rest.cnpj}</p>
+                              <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                                <span style={{ background: '#f3f4f6', borderRadius: 8, padding: '3px 10px', fontSize: 11, fontWeight: 600, color: '#374151' }}>
+                                  ðŸ“¦ {ctrl.produtos.filter(p => p.restaurante_id === rest.id).length} produtos
+                                </span>
+                                <span style={{ background: '#ECFDF5', borderRadius: 8, padding: '3px 10px', fontSize: 11, fontWeight: 600, color: '#065F46' }}>
+                                  ðŸ›’ {ctrl.pedidos.filter(p => p.restaurante_id === rest.id && p.status !== 'Entregue').length} ativos
+                                </span>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <ActionButton variant="secondary" size="sm" onClick={() => ctrl.prepararEdicaoRestaurante(rest)}>
+                                <Edit2 size={12} /> Editar
+                              </ActionButton>
+                              <ActionButton variant="danger" size="sm" onClick={() => ctrl.excluirRestaurante(rest.id, rest.nome)}>
+                                <Trash2 size={12} />
+                              </ActionButton>
+                            </div>
+                          </div>
+                          <MapaLocalizacao latitude={rest.latitude} longitude={rest.longitude} endereco={rest.endereco} nome={rest.nome} />
+                        </div>
+                      </div>
+                    ))
                   )}
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Visualização no mapa:</label>
-                    <MapaLocalizacao latitude={ctrl.latitude} longitude={ctrl.longitude} endereco={ctrl.endereco} nome={ctrl.nomeRest || 'Nova Loja'} />
-                  </div>
-                  <button type="submit" className={`w-full text-white font-bold py-3 rounded-xl transition-all active:scale-95 ${ctrl.editandoRestId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-900 hover:bg-black'}`}>
-                    {ctrl.editandoRestId ? 'Atualizar Loja' : 'Salvar Loja'}
-                  </button>
-                </form>
+                </div>
               </div>
             )}
-
-            <div className="space-y-3">
-              <h2 className="text-lg font-black text-gray-800">Minhas Lojas</h2>
-              {ctrl.restaurantes.length === 0 ? (
-                <div className="bg-white rounded-2xl p-10 text-center text-gray-400 border border-gray-100">
-                  <Store size={48} className="mx-auto mb-4 opacity-50" />
-                  <p>Nenhuma loja cadastrada.</p>
-                </div>
-              ) : (
-                ctrl.restaurantes.map(rest => (
-                  <div key={rest.id} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex-1">
-                        <h3 className="font-black text-lg text-gray-800">{rest.nome}</h3>
-                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin size={14} /> {rest.endereco}</p>
-                        <p className="text-xs text-gray-400 mt-1">CNPJ: {rest.cnpj}</p>
-                        {rest.latitude && <p className="text-xs text-gray-400 mt-1">📍 {rest.latitude}, {rest.longitude}</p>}
-                      </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => ctrl.prepararEdicaoRestaurante(rest)} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-bold text-sm transition-colors"><Edit2 size={16} /> Editar</button>
-                        <button onClick={() => ctrl.excluirRestaurante(rest.id, rest.nome)} className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-bold text-sm transition-colors"><Trash2 size={16} /> Excluir</button>
-                      </div>
-                    </div>
-                    <MapaLocalizacao latitude={rest.latitude} longitude={rest.longitude} endereco={rest.endereco} nome={rest.nome} />
-                    <div className="mt-3 pt-3 border-t border-gray-50 flex gap-4 text-xs">
-                      <span className="text-gray-500">📦 {ctrl.produtos.filter(p => p.restaurante_id === rest.id).length} produtos</span>
-                      <span className="text-gray-500">🛒 {ctrl.pedidos.filter(p => p.restaurante_id === rest.id && p.status !== 'Entregue').length} pedidos ativos</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-      </main>
-    </div>
+          </main>
+        </div>
+      </div>
+    </>
   );
 }
 

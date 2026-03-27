@@ -1,12 +1,12 @@
-/* 1. Importação da Fonte */
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap');
+/* 1. Importação de Fontes */
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800;900&family=DM+Sans:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
-/* 2. Novo padrão Tailwind v4 */
+/* 2. Tailwind v4 */
 @import "tailwindcss";
 
-/* 3. Suas utilidades personalizadas */
+/* 3. Utilidades personalizadas */
 @theme {
-  /* Se precisar adicionar cores extras ou fontes ao tema no v4, é aqui */
+  /* Cores extras disponíveis via Tailwind se necessário */
 }
 
 @layer utilities {
