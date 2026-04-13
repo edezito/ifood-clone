@@ -1,74 +1,49 @@
 // ============================================================
-// MODEL: Pedido
-// Responsabilidade: toda comunicação com Supabase para pedidos
+// CONTROLLER: useAcompanhamentoController
+// Responsabilidade: busca dados do pedido e assina mudanças
+// em tempo real via Supabase Realtime.
 // ============================================================
-import { supabase } from '../services/Supabaseclient ';
+import { useState, useEffect } from 'react';
+import { PedidoModel } from '../models/pedidoModel';
+import { ItensPedidoModel } from '../models/itensPedidoModel';
 
-export const PedidoModel = {
-  async listarTodos() {
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('*')
-      .order('criado_em', { ascending: false });
-    if (error) throw error;
-    return data;
-  },
+export function useAcompanhamentoController(pedidoId) {
+  const [pedido, setPedido] = useState(null);
+  const [itens, setItens] = useState([]);
 
-  async buscarPorId(id) {
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('*')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    return data;
-  },
+  useEffect(() => {
+    if (!pedidoId) return;
 
-  async buscarPorTelefone(telefone) {
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('*, restaurantes(nome)')
-      .eq('telefone', telefone)
-      .order('id', { ascending: false });
-    if (error) throw error;
-    return data;
-  },
+    const carregar = async () => {
+      try {
+        const [ped, its] = await Promise.all([
+          PedidoModel.buscarPorId(pedidoId),
+          ItensPedidoModel.buscarPorPedido(pedidoId),
+        ]);
+        setPedido(ped);
+        setItens(its ?? []);
+      } catch (err) {
+        console.error('Erro ao carregar pedido:', err);
+      }
+    };
 
-  async criar(dados) {
-    const { data, error } = await supabase
-      .from('pedidos')
-      .insert([dados])
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
+    carregar();
 
-  async atualizarStatus(id, novoStatus) {
-    const { error } = await supabase
-      .from('pedidos')
-      .update({ status: novoStatus })
-      .eq('id', id);
-    if (error) throw error;
-  },
+    const canal = PedidoModel.assinarMudancas(pedidoId, (novoPedido) =>
+      setPedido(novoPedido)
+    );
 
-  assinarMudancas(pedidoId, callback) {
-    return supabase
-      .channel(`pedido-${pedidoId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'pedidos',
-          filter: `id=eq.${pedidoId}`,
-        },
-        (payload) => callback(payload.new)
-      )
-      .subscribe();
-  },
+    return () => PedidoModel.cancelarAssinatura(canal);
+  }, [pedidoId]);
 
-  cancelarAssinatura(channel) {
-    supabase.removeChannel(channel);
-  },
-};
+  const STATUS_PASSOS = [
+    { label: 'Pedido Recebido', key: 'Aguardando' },
+    { label: 'Em Preparação', key: 'Em Preparação' },
+    { label: 'A caminho', key: 'Em Trânsito' },
+    { label: 'Entregue', key: 'Entregue' },
+  ];
+
+  const indiceStatusAtual = STATUS_PASSOS.findIndex((p) => p.key === pedido?.status);
+
+  return { pedido, itens, STATUS_PASSOS, indiceStatusAtual };
+}
