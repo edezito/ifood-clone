@@ -2,7 +2,7 @@
 // MODEL: ItensPedidoModel
 // Responsabilidade: Acesso a dados da tabela 'itens_pedido'
 // ============================================================
-import { supabase } from '../services/Supabaseclient ';
+import { supabase } from '../services/Supabaseclient';
 
 export class ItensPedidoModel {
   /**
@@ -70,5 +70,16 @@ export class ItensPedidoModel {
 
     if (error) throw error;
     return data;
+  }
+
+  /**
+   * Insere múltiplos itens de uma vez (batch insert)
+   * Usado pelo useClienteController ao finalizar o pedido
+   */
+  static async inserirVarios(itens) {
+    const { error } = await supabase
+      .from('itens_pedido')
+      .insert(itens);
+    if (error) throw error;
   }
 }

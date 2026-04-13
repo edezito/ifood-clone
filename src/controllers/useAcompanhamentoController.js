@@ -2,7 +2,7 @@
 // CONTROLLER: useAcompanhamentoController
 // Responsabilidade: Orquestrar models e gerenciar estado
 // ============================================================
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { PedidoModel } from '../models/pedidoModel';
 import { ItensPedidoModel } from '../models/itensPedidoModel';
 import { StatusModel } from '../models/statusModel';
@@ -14,6 +14,13 @@ export function useAcompanhamentoController(pedidoId) {
   const [statusAnterior, setStatusAnterior] = useState(null);
   const [atualizando, setAtualizando] = useState(false);
   const [mostrarNotificacao, setMostrarNotificacao] = useState(false);
+
+  // Ref para acessar o pedido atual dentro do handler sem criar
+  // uma nova closure a cada render (resolve o stale closure).
+  const pedidoRef = useRef(null);
+  useEffect(() => {
+    pedidoRef.current = pedido;
+  }, [pedido]);
 
   // Carregar dados do pedido e itens
   const carregarDados = useCallback(async () => {
@@ -34,42 +41,49 @@ export function useAcompanhamentoController(pedidoId) {
     }
   }, [pedidoId]);
 
-  // Handler para atualizações em tempo real
+  // Handler ESTÁVEL — usa ref em vez de closure sobre `pedido`.
+  // Sem `pedido` nas deps, o useEffect abaixo só roda quando
+  // pedidoId muda, mantendo o canal Realtime sempre conectado.
+  //
+  // IMPORTANTE: payload.new do Supabase Realtime pode conter apenas
+  // as colunas alteradas, não o objeto completo. Fazemos merge com
+  // o pedido atual para não perder campos como pin_entrega e total.
   const handleAtualizacaoPedido = useCallback((novoPedido) => {
-    console.log('📡 [Controller] Pedido atualizado:', novoPedido);
+    console.log('📡 [Controller] Pedido atualizado (payload parcial):', novoPedido);
     
-    // Verificar mudança de status
-    if (pedido && novoPedido.status !== pedido.status) {
-      setStatusAnterior(pedido.status);
+    const pedidoAtual = pedidoRef.current;
+
+    // Merge: preserva campos do pedido atual que não vieram no payload
+    const pedidoCompleto = pedidoAtual
+      ? { ...pedidoAtual, ...novoPedido }
+      : novoPedido;
+
+    if (pedidoAtual && pedidoCompleto.status !== pedidoAtual.status) {
+      setStatusAnterior(pedidoAtual.status);
       setAtualizando(true);
       setMostrarNotificacao(true);
       
-      // Resetar estado de atualização após animação
       setTimeout(() => setAtualizando(false), 2000);
       
-      // Feedback tátil (mobile)
       if (navigator.vibrate) {
         navigator.vibrate([100, 50, 100]);
       }
     }
     
-    setPedido(novoPedido);
-  }, [pedido]);
+    setPedido(pedidoCompleto);
+  }, []); // sem deps → referência estável → canal nunca é recriado
 
-  // Efeito inicial
+  // Efeito inicial — roda UMA única vez por pedidoId.
+  // handleAtualizacaoPedido e carregarDados são estáveis.
   useEffect(() => {
     if (!pedidoId) return;
     
     carregarDados();
     
-    // Assinar mudanças em tempo real
     const canal = PedidoModel.assinarMudancas(pedidoId, handleAtualizacaoPedido);
     
-    // Polling de fallback
-    const intervalo = setInterval(() => {
-      console.log('🔄 [Controller] Polling de verificação');
-      carregarDados();
-    }, 30000);
+    // Polling de fallback (30s) para cobrir casos onde Realtime falha
+    const intervalo = setInterval(carregarDados, 30000);
     
     return () => {
       PedidoModel.cancelarAssinatura(canal);
@@ -117,12 +131,14 @@ export function useAcompanhamentoController(pedidoId) {
     passoAtual,
     configStatus,
     indiceStatus,
+    indiceStatusAtual: indiceStatus,   // alias esperado pela View
     progresso,
     statusAnterior,
     mensagemTransicao,
     
-    // Constantes
+    // Constantes (nomes duplicados para compatibilidade com a View)
     PASSOS: StatusModel.PASSOS,
+    STATUS_PASSOS: StatusModel.PASSOS, // alias esperado pela View
     STATUS_CONFIG: StatusModel.CONFIG,
     
     // Actions

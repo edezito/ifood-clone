@@ -21,6 +21,42 @@ import {
 } from 'lucide-react';
 
 // ============================================================
+// MAPA DE ESTILOS POR STATUS
+// Definido aqui (e não no model) para que o Tailwind encontre
+// todas as classes no build e não as remova no purge.
+// ============================================================
+const STATUS_STYLES = {
+  'Aguardando': {
+    bg:     'bg-gradient-to-br from-blue-50 to-indigo-50',
+    border: 'border-blue-200',
+    iconBg: 'bg-blue-100',
+    text:   'text-blue-700',
+    icon:   Clock,
+  },
+  'Em Preparação': {
+    bg:     'bg-gradient-to-br from-amber-50 to-orange-50',
+    border: 'border-amber-200',
+    iconBg: 'bg-amber-100',
+    text:   'text-amber-700',
+    icon:   ChefHat,
+  },
+  'Em Trânsito': {
+    bg:     'bg-gradient-to-br from-purple-50 to-pink-50',
+    border: 'border-purple-200',
+    iconBg: 'bg-purple-100',
+    text:   'text-purple-700',
+    icon:   Bike,
+  },
+  'Entregue': {
+    bg:     'bg-gradient-to-br from-emerald-50 to-green-50',
+    border: 'border-emerald-200',
+    iconBg: 'bg-emerald-100',
+    text:   'text-emerald-700',
+    icon:   CheckCircle2,
+  },
+};
+
+// ============================================================
 // COMPONENTES INTERNOS (Específicos desta tela)
 // ============================================================
 
@@ -124,28 +160,30 @@ function AnimatedProgressBar({ progresso, status }) {
   );
 }
 
-// Status Badge
+// Status Badge — usa STATUS_STYLES local para garantir que Tailwind
+// inclua todas as classes no build (purge-safe).
 function StatusBadge({ status, config, atualizando }) {
-  const Icon = config?.icon || Clock;
+  const s = STATUS_STYLES[status] ?? STATUS_STYLES['Aguardando'];
+  const Icon = s.icon;
   
   return (
-    <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${config?.bgGradient} border ${config?.borderColor} p-6 transition-all duration-500 ${atualizando ? 'scale-[1.02] shadow-lg' : ''}`}>
+    <div className={`relative overflow-hidden rounded-2xl ${s.bg} border ${s.border} p-6 transition-all duration-500 ${atualizando ? 'scale-[1.02] shadow-lg' : ''}`}>
       <div className="absolute top-0 right-0 w-32 h-32 opacity-10">
         <Icon className="w-full h-full" />
       </div>
       
       <div className="relative flex items-start justify-between">
         <div className="space-y-2">
-          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${config?.iconBg} ${config?.textColor} text-sm font-medium`}>
+          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${s.iconBg} ${s.text} text-sm font-medium`}>
             <Clock className="w-4 h-4" />
             <span>{config?.eta}</span>
           </div>
           
-          <h2 className={`text-2xl font-bold ${config?.textColor}`}>{config?.label}</h2>
+          <h2 className={`text-2xl font-bold ${s.text}`}>{config?.label}</h2>
         </div>
         
-        <div className={`w-14 h-14 rounded-2xl ${config?.iconBg} flex items-center justify-center ${atualizando ? 'animate-bounce' : ''}`}>
-          <Icon className={`w-7 h-7 ${config?.textColor}`} />
+        <div className={`w-14 h-14 rounded-2xl ${s.iconBg} flex items-center justify-center ${atualizando ? 'animate-bounce' : ''}`}>
+          <Icon className={`w-7 h-7 ${s.text}`} />
         </div>
       </div>
     </div>
@@ -469,7 +507,7 @@ function AcompanhamentoPedido({ pedidoId, onVoltarAoMenu }) {
             <div className="space-y-4">
               <ProgressTracker 
                 statusAtual={pedido.status}
-                passos={STATUS_PASSOS.map((p, i) => ({ ...p, icon: p.key === 'Aguardando' ? Clock : p.key === 'Em Preparação' ? ChefHat : p.key === 'Em Trânsito' ? Bike : CheckCircle2 }))}
+                passos={STATUS_PASSOS.map((p) => ({ ...p, icon: STATUS_STYLES[p.key]?.icon ?? Clock }))}
                 indiceAtual={indiceStatusAtual}
               />
               
