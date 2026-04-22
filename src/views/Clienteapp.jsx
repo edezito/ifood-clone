@@ -1,816 +1,398 @@
-// ============================================================
-// VIEW: ClienteApp — FoodExpress (iFood Clone)
-// Design: Desktop-first, navbar, hero, grid de produtos,
-// carrinho slide-over lateral, FAQ, footer
-// Paleta: Vermelho #EA1D2C (iFood), Branco, Cinza
-// ============================================================
-import React, { useState } from 'react';
-import {
-  Search, ShoppingCart, Plus, Minus, X, ChevronDown, ChevronRight,
-  Clock, Star, MapPin, LogOut, ArrowRight, Utensils, Truck, Award,
-  HelpCircle, ChevronUp,
-} from 'lucide-react';
-import { useClienteController } from '../controllers/useClienteController';
-import AcompanhamentoPedido from './Acompanhamentopedido';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../services/supabaseClient';
+import AcompanhamentoPedido from './AcompanhamentoPedido';
 import HistoricoPedidos from './HistoricoPedidos';
-import LoginCliente from './Logincliente';
+import LoginCliente from './LoginCliente';
+import {
+  Search, MapPin, Star, ShoppingBag, Pizza, Coffee, Soup, Beef, X,
+  ChevronRight, Home, Heart, LogOut, Clock
+} from 'lucide-react';
 
-/* ─── Google Fonts ─────────────────────────────────────────── */
-const FONTS = `
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800;900&family=DM+Sans:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
-`;
+const categoriasConfig = {
+  pizza:      { nome: 'Pizza',      icone: Pizza  },
+  lanches:    { nome: 'Lanches',    icone: Coffee },
+  japonesa:   { nome: 'Japonesa',   icone: Soup   },
+  brasileira: { nome: 'Brasileira', icone: Beef   },
+  massas:     { nome: 'Massas',     icone: Pizza  },
+  saudavel:   { nome: 'Saudável',   icone: Heart  },
+  bebidas:    { nome: 'Bebidas',    icone: Coffee },
+  sobremesas: { nome: 'Sobremesas', icone: Soup   },
+  outros:     { nome: 'Outros',     icone: Beef   },
+};
 
-/* ─── Design Tokens ─────────────────────────────────────────── */
-const tokens = `
-:root {
-  --primary:    #EA1D2C;
-  --primary-dark:#C8101E;
-  --primary-light:#FFF0F0;
-  --dark:       #3E3E3E;
-  --dark-bg:    #2B1A1A;
-  --white:      #FFFFFF;
-  --gray-50:    #F7F7F7;
-  --gray-100:   #F0F0F0;
-  --gray-200:   #E0E0E0;
-  --gray-300:   #CCCCCC;
-  --gray-400:   #A0A0A0;
-  --gray-500:   #717171;
-  --gray-600:   #505050;
-  --gray-700:   #3E3E3E;
-  --gray-800:   #2B2B2B;
-  --gray-900:   #1A1A1A;
-  --green:      #50A773;
-  --green-light:#E8F5EE;
-  --yellow:     #FFB800;
-  --radius-sm:  8px;
-  --radius-md:  12px;
-  --radius-lg:  16px;
-  --radius-xl:  24px;
-  --radius-full:9999px;
-  --shadow-sm:  0 1px 2px rgba(0,0,0,0.05);
-  --shadow-md:  0 4px 6px -1px rgba(0,0,0,0.1);
-  --shadow-lg:  0 10px 15px -3px rgba(0,0,0,0.1);
-  --shadow-xl:  0 20px 25px -5px rgba(0,0,0,0.1);
-}
-* { margin:0; padding:0; box-sizing:border-box; }
-html { scroll-behavior: smooth; }
-body { font-family:'DM Sans', 'Inter', sans-serif; background:var(--white); color:var(--gray-900); }
-`;
+const ClienteApp = ({ onLogout }) => {
+  const [restaurantes, setRestaurantes] = useState([]);
+  const [produtos, setProdutos] = useState([]);
+  const [usuarioLogado, setUsuarioLogado] = useState(null);
+  const [pedidoAtivoId, setPedidoAtivoId] = useState(null);
+  const [verHistorico, setVerHistorico] = useState(false);
+  const [precisaLogar, setPrecisaLogar] = useState(false);
+  const [carrinhoPendente, setCarrinhoPendente] = useState(null);
+  const [enderecoPadrao] = useState('Rua Augusta, 123 - Consolação');
+  const [busca, setBusca] = useState('');
+  const [carrinhoAberto, setCarrinhoAberto] = useState(false);
+  const [carrinho, setCarrinho] = useState([]);
+  const [categoriaAtiva, setCategoriaAtiva] = useState('todos');
+  const [restauranteExpandido, setRestauranteExpandido] = useState(null);
 
-/* ─── Animações ─────────────────────────────────────────────── */
-const animations = `
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
-}
-@keyframes scaleIn {
-  from { transform: scale(0.95); opacity: 0; }
-  to   { transform: scale(1); opacity: 1; }
-}
-`;
+  useEffect(() => {
+    fetchDados();
+    verificarSessao();
+  }, []);
 
-/* ─── Categorias ─────────────────────────────────────────────── */
-const CATEGORIAS = [
-  { key: 'todos',      label: 'Ver Tudo',   emoji: '🏠' },
-  { key: 'pizza',      label: 'Pizzas',     emoji: '🍕' },
-  { key: 'lanches',    label: 'Lanches',    emoji: '🍔' },
-  { key: 'japonesa',   label: 'Japonesa',   emoji: '🍱' },
-  { key: 'brasileira', label: 'Brasileira', emoji: '🥘' },
-  { key: 'massas',     label: 'Massas',     emoji: '🍝' },
-  { key: 'saudavel',   label: 'Saudável',   emoji: '🥗' },
-];
-
-/* ─── FAQ Data ─────────────────────────────────────────────── */
-const FAQ_DATA = [
-  { q: 'Como faço um pedido?', a: 'Navegue pelo cardápio, adicione itens ao carrinho e finalize seu pedido. É fácil e rápido!' },
-  { q: 'Quais formas de pagamento?', a: 'Aceitamos cartão de crédito, débito, Pix e dinheiro na entrega.' },
-  { q: 'Qual o tempo de entrega?', a: 'O tempo médio de entrega varia de 25 a 45 minutos dependendo do restaurante e da sua localização.' },
-  { q: 'Posso acompanhar meu pedido?', a: 'Sim! Após finalizar o pedido você pode acompanhar em tempo real cada etapa, desde o preparo até a entrega.' },
-];
-
-/* ─── Navbar ─────────────────────────────────────────────────── */
-function Navbar({ cartCount, onCartClick, onHistorico, onLogout, usuarioLogado }) {
-  return (
-    <header style={{
-      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
-      background: 'rgba(255,255,255,0.97)',
-      backdropFilter: 'blur(12px)',
-      borderBottom: '1px solid var(--gray-200)',
-      height: 72,
-    }}>
-      <div style={{
-        maxWidth: 1280, margin: '0 auto', padding: '0 32px',
-        height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 20,
-          }}>
-            🍔
-          </div>
-          <span style={{
-            fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 22,
-            color: 'var(--gray-900)',
-          }}>
-            Food<span style={{ color: 'var(--primary)' }}>Express</span>
-          </span>
-        </div>
-
-        {/* Nav links */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
-          {['Início', 'Cardápio', 'Sobre Nós', 'FAQ'].map((link, i) => (
-            <a
-              key={link}
-              href={`#${link.toLowerCase().replace(' ', '-')}`}
-              style={{
-                textDecoration: 'none', fontSize: 15, fontWeight: 500,
-                color: i === 0 ? 'var(--primary)' : 'var(--gray-600)',
-                borderBottom: i === 0 ? '2px solid var(--primary)' : 'none',
-                paddingBottom: 4,
-                transition: 'color 0.2s',
-              }}
-              onMouseEnter={e => { if (i !== 0) e.target.style.color = 'var(--primary)'; }}
-              onMouseLeave={e => { if (i !== 0) e.target.style.color = 'var(--gray-600)'; }}
-            >
-              {link}
-            </a>
-          ))}
-        </nav>
-
-        {/* Right actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {usuarioLogado && (
-            <span style={{ fontSize: 13, color: 'var(--gray-500)', fontWeight: 500 }}>
-              Olá, {usuarioLogado.nome?.split(' ')[0] ?? 'Cliente'}
-            </span>
-          )}
-          <button
-            onClick={onHistorico}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer', padding: 6,
-              display: 'flex', alignItems: 'center', gap: 4,
-              color: 'var(--gray-500)', fontSize: 13, fontWeight: 500,
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--gray-500)'}
-          >
-            <Clock size={16} /> Pedidos
-          </button>
-          <button
-            onClick={onLogout}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer', padding: 6,
-              color: 'var(--gray-400)',
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--gray-400)'}
-          >
-            <LogOut size={16} />
-          </button>
-          <button
-            onClick={onCartClick}
-            style={{
-              position: 'relative', background: 'none', border: 'none',
-              cursor: 'pointer', padding: 6,
-            }}
-          >
-            <ShoppingCart size={22} color="var(--gray-700)" />
-            {cartCount > 0 && (
-              <span style={{
-                position: 'absolute', top: -2, right: -4,
-                background: 'var(--primary)', color: '#fff',
-                fontSize: 10, fontWeight: 800,
-                width: 18, height: 18, borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {cartCount}
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-/* ─── Hero Section ─────────────────────────────────────────── */
-function HeroSection() {
-  return (
-    <section id="início" style={{
-      position: 'relative', marginTop: 72,
-      background: 'linear-gradient(135deg, #1a0a0a 0%, #2B1A1A 40%, #3E2020 100%)',
-      minHeight: 520, display: 'flex', alignItems: 'center',
-      overflow: 'hidden',
-    }}>
-      {/* Background image overlay */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: `url('https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1400&q=80')`,
-        backgroundSize: 'cover', backgroundPosition: 'center',
-        opacity: 0.15,
-      }} />
-
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: 'linear-gradient(90deg, rgba(26,10,10,0.95) 0%, rgba(26,10,10,0.7) 50%, rgba(26,10,10,0.4) 100%)',
-      }} />
-
-      <div style={{
-        position: 'relative', maxWidth: 1280, margin: '0 auto', padding: '0 32px',
-        width: '100%',
-      }}>
-        {/* Badge */}
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8,
-          background: 'rgba(234,29,44,0.15)', border: '1px solid rgba(234,29,44,0.3)',
-          borderRadius: 'var(--radius-full)', padding: '6px 16px',
-          marginBottom: 24, animation: 'slideUp 0.5s ease-out',
-        }}>
-          <span style={{ fontSize: 14 }}>⚡</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#FF6B6B', letterSpacing: '0.02em' }}>
-            Entrega em minutos na sua porta
-          </span>
-        </div>
-
-        {/* Headline */}
-        <h1 style={{
-          fontFamily: 'Syne, sans-serif', fontWeight: 900,
-          fontSize: 56, color: '#fff', lineHeight: 1.1,
-          maxWidth: 600, marginBottom: 20,
-          animation: 'slideUp 0.6s ease-out',
-        }}>
-          Tudo que você{' '}
-          <span style={{ color: 'var(--primary)' }}>quer comer</span>,{' '}
-          entregue na sua porta.
-        </h1>
-
-        {/* Subtitle */}
-        <p style={{
-          fontSize: 17, color: 'rgba(255,255,255,0.65)', lineHeight: 1.6,
-          maxWidth: 520, marginBottom: 36,
-          animation: 'slideUp 0.7s ease-out',
-        }}>
-          Restaurantes, pizzarias, hamburguerias e muito mais. Peça pelo app e receba com rapidez e qualidade.
-        </p>
-
-        {/* CTAs */}
-        <div style={{ display: 'flex', gap: 16, animation: 'slideUp 0.8s ease-out' }}>
-          <a
-            href="#cardápio"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              background: 'var(--primary)', color: '#fff',
-              padding: '14px 28px', borderRadius: 'var(--radius-full)',
-              fontFamily: 'DM Sans, sans-serif', fontWeight: 700, fontSize: 15,
-              textDecoration: 'none', border: 'none', cursor: 'pointer',
-              boxShadow: '0 8px 24px rgba(234,29,44,0.35)',
-              transition: 'transform 0.2s, box-shadow 0.2s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 12px 32px rgba(234,29,44,0.45)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(234,29,44,0.35)'; }}
-          >
-            Ver Cardápio <ArrowRight size={16} />
-          </a>
-          <a
-            href="#sobre-nós"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              background: 'rgba(255,255,255,0.1)',
-              border: '1.5px solid rgba(255,255,255,0.25)',
-              color: '#fff', padding: '14px 28px',
-              borderRadius: 'var(--radius-full)',
-              fontFamily: 'DM Sans, sans-serif', fontWeight: 600, fontSize: 15,
-              textDecoration: 'none', cursor: 'pointer',
-              transition: 'background 0.2s, border-color 0.2s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.15)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'; }}
-          >
-            Conheça o FoodExpress
-          </a>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ─── Category Pill ─────────────────────────────────────────── */
-function CategoryPill({ emoji, label, active, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: active ? '10px 24px' : '10px 22px',
-        borderRadius: 'var(--radius-full)',
-        border: active ? 'none' : '1.5px solid var(--gray-200)',
-        background: active ? 'var(--primary)' : 'var(--white)',
-        color: active ? '#fff' : 'var(--gray-600)',
-        fontFamily: 'DM Sans, sans-serif',
-        fontWeight: active ? 700 : 500,
-        fontSize: 14,
-        cursor: 'pointer',
-        whiteSpace: 'nowrap',
-        flexShrink: 0,
-        boxShadow: active ? '0 4px 12px rgba(234,29,44,0.25)' : 'var(--shadow-sm)',
-        transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
-      }}
-      onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; } }}
-      onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor = 'var(--gray-200)'; e.currentTarget.style.color = 'var(--gray-600)'; } }}
-    >
-      <span style={{ fontSize: 16 }}>{emoji}</span>
-      {label}
-    </button>
-  );
-}
-
-/* ─── Product Card (SEM imagem) ─────────────────────────────── */
-function ProductCard({ produto, restaurante, onAdd }) {
-  const categoryEmoji = {
-    pizza: '🍕', lanches: '🍔', japonesa: '🍱',
-    brasileira: '🥘', massas: '🍝', saudavel: '🥗',
+  const verificarSessao = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) await buscarDadosCliente(session.user);
   };
-  const emoji = categoryEmoji[restaurante?.categoria] || '🍽️';
 
-  return (
-    <div
-      style={{
-        background: 'var(--white)',
-        borderRadius: 'var(--radius-lg)',
-        overflow: 'hidden',
-        border: '1px solid var(--gray-200)',
-        transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)',
-        cursor: 'default',
-      }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-xl)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
-    >
-      {/* Emoji header ao invés de imagem */}
-      <div style={{
-        height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'linear-gradient(135deg, var(--gray-50), var(--gray-100))',
-        fontSize: 56,
-      }}>
-        {emoji}
-      </div>
+  const buscarDadosCliente = async (user) => {
+    try {
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('nome, endereco, complemento, telefone')
+        .eq('id', user.id)
+        .single();
+      if (error && error.code !== 'PGRST116') console.error('Erro ao buscar cliente:', error);
+      setUsuarioLogado({
+        ...user,
+        nome: data?.nome || user.user_metadata?.nome || 'Cliente',
+        endereco: data?.endereco,
+        complemento: data?.complemento,
+        telefone: data?.telefone || user.phone
+      });
+    } catch (error) {
+      console.error('Erro:', error);
+      setUsuarioLogado(user);
+    }
+  };
 
-      {/* Content */}
-      <div style={{ padding: '20px' }}>
-        {/* Restaurant tag */}
-        {restaurante?.nome && (
-          <span style={{
-            display: 'inline-block', fontSize: 11, fontWeight: 600,
-            color: 'var(--primary)', background: 'var(--primary-light)',
-            padding: '3px 10px', borderRadius: 'var(--radius-full)',
-            marginBottom: 10,
-          }}>
-            {restaurante.nome}
-          </span>
-        )}
+  const fetchDados = async () => {
+    try {
+      const { data: rests } = await supabase.from('restaurantes').select('*');
+      if (rests) setRestaurantes(rests);
+      const { data: prods } = await supabase.from('produtos').select('*');
+      if (prods) setProdutos(prods);
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
+    }
+  };
 
-        <h3 style={{
-          fontFamily: 'Syne, sans-serif', fontWeight: 800,
-          fontSize: 17, color: 'var(--gray-900)', lineHeight: 1.3,
-          marginBottom: 8,
-        }}>
-          {produto.nome}
-        </h3>
-
-        <p style={{
-          fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.5,
-          marginBottom: 16,
-        }}>
-          Preparado com ingredientes selecionados
-        </p>
-
-        {/* Price + Add */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <p style={{ fontSize: 11, color: 'var(--gray-400)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 2 }}>
-              PREÇO
-            </p>
-            <p style={{
-              fontFamily: 'Syne, sans-serif', fontWeight: 900,
-              fontSize: 22, color: 'var(--gray-900)',
-            }}>
-              R$ {Number(produto.preco).toFixed(2)}
-            </p>
-          </div>
-          <button
-            onClick={() => onAdd(produto, restaurante?.id)}
-            style={{
-              width: 44, height: 44, borderRadius: '50%',
-              background: 'var(--primary)', border: 'none',
-              cursor: 'pointer', display: 'flex',
-              alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(234,29,44,0.35)',
-              transition: 'transform 0.15s, box-shadow 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(234,29,44,0.45)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(234,29,44,0.35)'; }}
-          >
-            <Plus size={20} color="#fff" strokeWidth={2.5} />
-          </button>
-        </div>
-      </div>
-    </div>
+  // Categorias que realmente existem nos produtos cadastrados
+  const categoriasComProdutos = Object.keys(categoriasConfig).filter(cat =>
+    produtos.some(p => p.categoria === cat && p.disponivel !== false)
   );
-}
 
-/* ─── Sobre Nós Section ───────────────────────────────────── */
-function SobreNos() {
-  const features = [
-    { icon: Utensils, title: 'Variedade de Restaurantes', desc: 'Milhares de opções de restaurantes, de fast food a comida gourmet, tudo na palma da mão.' },
-    { icon: Truck, title: 'Entrega Rápida', desc: 'Receba seu pedido em casa ou no trabalho com rapidez e segurança.' },
-    { icon: Award, title: 'Qualidade Garantida', desc: 'Restaurantes avaliados e verificados para garantir a melhor experiência.' },
-  ];
+  // Restaurantes que têm pelo menos 1 produto na categoria ativa
+  const restaurantesFiltrados = restaurantes.filter(rest => {
+    const nomeMatch = rest.nome.toLowerCase().includes(busca.toLowerCase());
+    if (!nomeMatch) return false;
 
-  return (
-    <section id="sobre-nós" style={{
-      padding: '80px 32px', maxWidth: 1280, margin: '0 auto',
-    }}>
-      <div style={{ textAlign: 'center', marginBottom: 48 }}>
-        <h2 style={{
-          fontFamily: 'Syne, sans-serif', fontWeight: 900,
-          fontSize: 36, color: 'var(--gray-900)',
-        }}>
-          Por que escolher o <span style={{ color: 'var(--primary)' }}>FoodExpress</span>?
-        </h2>
-        <p style={{ fontSize: 16, color: 'var(--gray-500)', marginTop: 12, maxWidth: 520, margin: '12px auto 0' }}>
-          A melhor experiência de delivery na sua cidade.
-        </p>
-      </div>
+    if (categoriaAtiva === 'todos') return true;
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24 }}>
-        {features.map(({ icon: Icon, title, desc }) => (
-          <div key={title} style={{
-            background: 'var(--gray-50)', borderRadius: 'var(--radius-xl)',
-            padding: '36px 28px', textAlign: 'center',
-            border: '1px solid var(--gray-100)',
-            transition: 'all 0.3s',
-          }}
-            onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-lg)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
-          >
-            <div style={{
-              width: 56, height: 56, borderRadius: 16,
-              background: 'var(--primary-light)', display: 'flex',
-              alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 20px',
-            }}>
-              <Icon size={24} color="var(--primary)" />
-            </div>
-            <h3 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, color: 'var(--gray-900)', marginBottom: 10 }}>
-              {title}
-            </h3>
-            <p style={{ fontSize: 14, color: 'var(--gray-500)', lineHeight: 1.6 }}>
-              {desc}
-            </p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
+    // Tem produto nesta categoria?
+    return produtos.some(p =>
+      p.restaurante_id === rest.id &&
+      p.categoria === categoriaAtiva &&
+      p.disponivel !== false
+    );
+  });
 
-/* ─── FAQ Item ─────────────────────────────────────────────── */
-function FAQItem({ question, answer }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div style={{ borderBottom: '1px solid var(--gray-200)', transition: 'all 0.2s' }}>
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          width: '100%', padding: '20px 0',
-          background: 'none', border: 'none', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          textAlign: 'left',
+  const adicionarAoCarrinho = (produto, restId) => {
+    if (carrinho.length > 0 && carrinho[0].restauranteId !== restId) {
+      if (window.confirm('Sua sacola já tem itens de outro local. Limpar?')) {
+        setCarrinho([{ ...produto, quantidade: 1, restauranteId: restId }]);
+      }
+      return;
+    }
+    const itemExist = carrinho.find(i => i.id === produto.id);
+    if (itemExist) {
+      setCarrinho(carrinho.map(i => i.id === produto.id ? { ...i, quantidade: i.quantidade + 1 } : i));
+    } else {
+      setCarrinho([...carrinho, { ...produto, quantidade: 1, restauranteId: restId }]);
+    }
+  };
+
+  const calcularTotal = () => carrinho.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
+
+  const finalizarPedido = async (carrinhoData = null) => {
+  const carrinhoAtual = carrinhoData || carrinho;
+
+  if (!usuarioLogado) {
+    setCarrinhoPendente(carrinhoAtual);
+    setPrecisaLogar(true);
+    setCarrinhoAberto(false);
+    return;
+  }
+
+  if (carrinhoAtual.length === 0) { 
+    alert('Carrinho vazio!'); 
+    return; 
+  }
+
+  const restId = carrinhoAtual[0].restauranteId;
+  const pinGerado = Math.floor(1000 + Math.random() * 9000).toString();
+  const total = carrinhoAtual.reduce((acc, item) => acc + (item.preco * item.quantidade), 0);
+
+  try {
+    const { data: pedData, error: pedError } = await supabase
+      .from('pedidos')
+      .insert([{
+        restaurante_id: restId,
+        cliente_nome: usuarioLogado.nome || 'Cliente',
+        cliente_id: usuarioLogado.id,
+        total: total,
+        forma_pagamento: 'Cartão',
+        tipo_entrega: 'Entrega',
+        status: 'Aguardando',
+        telefone: usuarioLogado.telefone || usuarioLogado.phone,
+        pin_entrega: pinGerado,
+        email: usuarioLogado.email,
+        endereco: usuarioLogado.endereco || enderecoPadrao
+      }])
+      .select()
+      .single();
+
+    if (pedError) throw new Error(pedError.message);
+
+    const itensParaInserir = carrinhoAtual.map(item => ({
+      pedido_id: pedData.id,
+      produto_id: item.id,
+      quantidade: item.quantidade,
+      preco_unitario: item.preco
+    }));
+
+    const { error: itensError } = await supabase.from('itens_pedido').insert(itensParaInserir);
+    if (itensError) throw new Error(itensError.message);
+
+    // ✅ LIMPAR CARRINHO E REDIRECIONAR
+    setCarrinho([]);
+    setCarrinhoPendente(null);
+    setCarrinhoAberto(false);
+    setPedidoAtivoId(pedData.id);
+    
+    // ✅ O PIN será enviado automaticamente quando o status mudar para "Em Trânsito"
+    // O dono do restaurante vai alterar o status depois
+    
+  } catch (error) {
+    console.error('Erro ao finalizar:', error);
+    alert(`Erro ao fazer pedido: ${error.message}`);
+  }
+};
+
+  // Navegação
+  if (pedidoAtivoId) {
+    return <AcompanhamentoPedido pedidoId={pedidoAtivoId} onVoltarAoMenu={() => setPedidoAtivoId(null)} />;
+  }
+  if (verHistorico) {
+    return <HistoricoPedidos
+      telefone={usuarioLogado?.telefone || usuarioLogado?.phone}
+      onVoltar={() => setVerHistorico(false)}
+      onVerDetalhes={(id) => { setPedidoAtivoId(id); setVerHistorico(false); }}
+    />;
+  }
+  if (precisaLogar) {
+    return (
+      <LoginCliente
+        onLoginSucesso={async (user) => {
+          await buscarDadosCliente(user);
+          setPrecisaLogar(false);
+          if (carrinhoPendente) {
+            await finalizarPedido(carrinhoPendente);
+            setCarrinhoPendente(null);
+          } else {
+            setCarrinhoAberto(true);
+          }
         }}
-      >
-        <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--gray-800)' }}>{question}</span>
-        {open ? <ChevronUp size={18} color="var(--primary)" /> : <ChevronDown size={18} color="var(--gray-400)" />}
-      </button>
-      {open && (
-        <div style={{ paddingBottom: 20, animation: 'fadeIn 0.2s ease-out' }}>
-          <p style={{ fontSize: 14, color: 'var(--gray-500)', lineHeight: 1.7 }}>{answer}</p>
+      />
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] font-sans pb-24">
+
+      {/* Navbar */}
+      <nav className="fixed top-0 left-0 right-0 bg-white shadow-sm z-40 p-4 border-b">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <MapPin className="text-red-600 w-5 h-5" />
+              <span className="font-bold text-gray-700 text-sm truncate max-w-[180px]">
+                {usuarioLogado?.endereco || enderecoPadrao}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {usuarioLogado && (
+                <span className="text-sm text-gray-600 mr-2">
+                  Olá, {usuarioLogado.nome?.split(' ')[0] || 'Cliente'}
+                </span>
+              )}
+              <button onClick={() => setVerHistorico(true)} className="p-2 bg-gray-50 rounded-full text-gray-600">
+                <Clock size={20} />
+              </button>
+              <button onClick={onLogout} className="p-2 bg-red-50 rounded-full text-red-600">
+                <LogOut size={18} />
+              </button>
+            </div>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="Pratos ou restaurantes"
+              className="w-full bg-gray-100 p-2.5 pl-10 rounded-xl outline-none focus:ring-2 focus:ring-red-500/10"
+              onChange={(e) => setBusca(e.target.value)}
+            />
+          </div>
+        </div>
+      </nav>
+
+      <main className="pt-36 px-4 max-w-4xl mx-auto">
+
+        {/* Categorias — só mostra as que têm produtos */}
+        <div className="flex gap-2 overflow-x-auto pb-6 scrollbar-hide -mx-4 px-4">
+          <button
+            onClick={() => setCategoriaAtiva('todos')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border whitespace-nowrap transition-all ${
+              categoriaAtiva === 'todos' ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600'
+            }`}
+          >
+            <Home size={16} /> <span className="text-sm font-bold">Início</span>
+          </button>
+
+          {categoriasComProdutos.map(key => {
+            const Icon = categoriasConfig[key].icone;
+            const active = categoriaAtiva === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setCategoriaAtiva(key)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-full border whitespace-nowrap transition-all ${
+                  active ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600'
+                }`}
+              >
+                <Icon size={16} /> <span className="text-sm font-bold">{categoriasConfig[key].nome}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Restaurantes */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-black text-gray-800 text-xl tracking-tight">
+              {categoriaAtiva === 'todos' ? 'Lojas' : `${categoriasConfig[categoriaAtiva]?.nome || categoriaAtiva}`}
+            </h2>
+            {categoriaAtiva !== 'todos' && (
+              <span className="text-sm text-gray-400">{restaurantesFiltrados.length} loja(s)</span>
+            )}
+          </div>
+
+          {restaurantesFiltrados.length === 0 ? (
+            <div className="bg-white rounded-2xl p-10 text-center text-gray-400 border border-gray-100">
+              <p className="font-medium">Nenhuma loja encontrada</p>
+              <p className="text-sm mt-1">
+                {categoriaAtiva !== 'todos' ? 'Não há lojas com esta categoria de produto.' : 'Tente outro termo de busca.'}
+              </p>
+            </div>
+          ) : (
+            restaurantesFiltrados.map(rest => {
+              // Filtra os produtos por categoria ativa
+              const produtosDaLoja = produtos.filter(p => {
+                if (p.restaurante_id !== rest.id) return false;
+                if (p.disponivel === false) return false;
+                if (categoriaAtiva !== 'todos' && p.categoria !== categoriaAtiva) return false;
+                return true;
+              });
+
+              return (
+                <div key={rest.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm"
+                  onClick={() => setRestauranteExpandido(restauranteExpandido === rest.id ? null : rest.id)}>
+                  <div className="flex justify-between items-center cursor-pointer">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-lg text-gray-800 leading-tight">{rest.nome}</h3>
+                      <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                        <Star className="text-yellow-500 fill-yellow-500" size={12} />
+                        <span className="font-bold text-yellow-600">4.8</span>
+                        <span>•</span>
+                        <span className="uppercase tracking-wide">
+                          {categoriaAtiva !== 'todos'
+                            ? categoriasConfig[categoriaAtiva]?.nome
+                            : `${produtosDaLoja.length} produtos`}
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight className={`text-gray-300 transition-transform ${restauranteExpandido === rest.id ? 'rotate-90' : ''}`} />
+                  </div>
+
+                  {restauranteExpandido === rest.id && (
+                    <div className="mt-4 border-t border-gray-50 pt-4 space-y-3">
+                      {produtosDaLoja.length === 0 ? (
+                        <p className="text-sm text-gray-400 italic text-center py-2">Nenhum produto disponível nesta categoria.</p>
+                      ) : (
+                        produtosDaLoja.map(prod => (
+                          <div key={prod.id} className="flex justify-between items-center bg-gray-50/50 p-3 rounded-xl">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-gray-700">{prod.nome}</span>
+                              <span className="text-green-600 font-black">R$ {prod.preco.toFixed(2)}</span>
+                            </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); adicionarAoCarrinho(prod, rest.id); }}
+                              className="bg-white border-2 border-red-600 text-red-600 font-black px-4 py-1.5 rounded-xl hover:bg-red-600 hover:text-white transition-all active:scale-90"
+                            >
+                              ADD
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </main>
+
+      {/* Carrinho Flutuante */}
+      {carrinho.length > 0 && (
+        <button onClick={() => setCarrinhoAberto(true)}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-md bg-red-600 text-white p-4 rounded-2xl font-black flex justify-between shadow-2xl items-center active:scale-95 transition-transform">
+          <div className="flex items-center gap-3">
+            <ShoppingBag size={22} />
+            <span className="text-sm font-bold uppercase tracking-wider">{carrinho.length} itens</span>
+          </div>
+          <span className="text-lg">R$ {calcularTotal().toFixed(2)}</span>
+        </button>
+      )}
+
+      {/* Checkout Modal */}
+      {carrinhoAberto && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end backdrop-blur-[2px]">
+          <div className="bg-white w-full rounded-t-[32px] p-6 shadow-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-black text-gray-800 tracking-tight">Sua sacola</h2>
+              <button onClick={() => setCarrinhoAberto(false)} className="p-2 bg-gray-100 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="overflow-y-auto flex-1 space-y-4 mb-6 pr-2">
+              {carrinho.map(item => (
+                <div key={item.id} className="flex justify-between items-center border-b border-gray-50 pb-3">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-gray-800">{item.nome}</span>
+                    <span className="text-xs text-gray-400 font-bold uppercase tracking-tighter">{item.quantidade}x R$ {item.preco.toFixed(2)}</span>
+                  </div>
+                  <span className="font-black text-gray-900">R$ {(item.preco * item.quantidade).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => finalizarPedido()}
+              className="w-full bg-red-600 text-white p-4 rounded-2xl font-black text-xl shadow-lg shadow-red-200 mb-2">
+              Fazer Pedido
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
-}
-
-/* ─── FAQ Section ─────────────────────────────────────────── */
-function FAQSection() {
-  return (
-    <section id="faq" style={{ padding: '80px 32px', background: 'var(--gray-50)' }}>
-      <div style={{ maxWidth: 720, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 48 }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: '50%',
-            background: 'var(--primary-light)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 16px',
-          }}>
-            <HelpCircle size={22} color="var(--primary)" />
-          </div>
-          <h2 style={{
-            fontFamily: 'Syne, sans-serif', fontWeight: 900,
-            fontSize: 32, color: 'var(--gray-900)',
-          }}>
-            Perguntas <span style={{ color: 'var(--primary)' }}>Frequentes</span>
-          </h2>
-          <p style={{ fontSize: 15, color: 'var(--gray-500)', marginTop: 10 }}>
-            Tire suas dúvidas sobre o FoodExpress.
-          </p>
-        </div>
-        <div style={{
-          background: 'var(--white)', borderRadius: 'var(--radius-xl)',
-          padding: '8px 32px', border: '1px solid var(--gray-200)',
-        }}>
-          {FAQ_DATA.map((faq, i) => (
-            <FAQItem key={i} question={faq.q} answer={faq.a} />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ─── Cart Slide-over ─────────────────────────────────────── */
-function CartSlideOver({ carrinho, calcularTotal, onClose, onFinalize }) {
-  const total = calcularTotal();
-  const count = carrinho.reduce((a, i) => a + i.quantidade, 0);
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-        zIndex: 60, animation: 'fadeIn 0.2s ease-out',
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          position: 'absolute', right: 0, top: 0, bottom: 0,
-          width: 420, maxWidth: '100vw',
-          background: 'var(--white)',
-          borderLeft: '1px solid var(--gray-200)',
-          display: 'flex', flexDirection: 'column',
-          animation: 'slideInRight 0.3s cubic-bezier(0.4,0,0.2,1)',
-        }}
-      >
-        {/* Header */}
-        <div style={{
-          padding: '20px 24px', borderBottom: '1px solid var(--gray-200)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <ShoppingCart size={20} color="var(--gray-900)" />
-            <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, color: 'var(--gray-900)' }}>
-              Seu Carrinho
-            </span>
-          </div>
-          <button onClick={onClose} style={{
-            width: 32, height: 32, borderRadius: 8, border: 'none',
-            background: 'var(--gray-100)', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <X size={16} color="var(--gray-600)" />
-          </button>
-        </div>
-
-        {/* Items */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
-          {carrinho.length === 0 ? (
-            <div style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              height: '100%', color: 'var(--gray-400)',
-            }}>
-              <ShoppingCart size={48} strokeWidth={1} style={{ marginBottom: 16, opacity: 0.4 }} />
-              <p style={{ fontSize: 15, fontWeight: 500 }}>Seu carrinho está vazio</p>
-              <p style={{ fontSize: 13, marginTop: 4 }}>Adicione itens do cardápio</p>
-            </div>
-          ) : (
-            carrinho.map(item => (
-              <div key={item.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '16px 0', borderBottom: '1px solid var(--gray-100)', gap: 12,
-              }}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--gray-900)' }}>{item.nome}</p>
-                  <p style={{ fontSize: 13, color: 'var(--gray-400)', marginTop: 3 }}>
-                    {item.quantidade}× R$ {item.preco.toFixed(2)}
-                  </p>
-                </div>
-                <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 15, color: 'var(--gray-900)', flexShrink: 0 }}>
-                  R$ {(item.preco * item.quantidade).toFixed(2)}
-                </p>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Footer */}
-        {carrinho.length > 0 && (
-          <div style={{ padding: '20px 24px', borderTop: '1px solid var(--gray-200)' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16,
-            }}>
-              <span style={{ fontSize: 15, color: 'var(--gray-600)', fontWeight: 500 }}>
-                Total ({count} {count === 1 ? 'item' : 'itens'})
-              </span>
-              <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 22, color: 'var(--gray-900)' }}>
-                R$ {total.toFixed(2)}
-              </span>
-            </div>
-            <button
-              onClick={onFinalize}
-              style={{
-                width: '100%', padding: '16px', borderRadius: 'var(--radius-md)',
-                background: 'var(--primary)', color: '#fff', border: 'none',
-                fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 16,
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(234,29,44,0.35)',
-                transition: 'transform 0.15s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-            >
-              Finalizar Pedido →
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ─── Footer ─────────────────────────────────────────────── */
-function Footer() {
-  return (
-    <footer style={{ background: 'var(--gray-900)', padding: '48px 32px 32px' }}>
-      <div style={{
-        maxWidth: 1280, margin: '0 auto',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 8,
-            background: 'var(--primary)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center',
-            fontSize: 16,
-          }}>
-            🍔
-          </div>
-          <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, color: '#fff' }}>
-            Food<span style={{ color: 'var(--primary)' }}>Express</span>
-          </span>
-        </div>
-        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>
-          © 2024 FoodExpress — Projeto Acadêmico
-        </p>
-      </div>
-    </footer>
-  );
-}
-
-/* ─── COMPONENTE PRINCIPAL ──────────────────────────────────── */
-function ClienteApp({ onLogout }) {
-  const ctrl = useClienteController();
-
-  if (ctrl.pedidoAtivoId) {
-    return <AcompanhamentoPedido pedidoId={ctrl.pedidoAtivoId} onVoltarAoMenu={() => ctrl.setPedidoAtivoId(null)} />;
-  }
-  if (ctrl.verHistorico) {
-    return (
-      <HistoricoPedidos
-        telefone={ctrl.usuarioLogado?.telefone ?? ctrl.usuarioLogado?.phone}
-        onVoltar={() => ctrl.setVerHistorico(false)}
-        onVerDetalhes={id => { ctrl.setPedidoAtivoId(id); ctrl.setVerHistorico(false); }}
-      />
-    );
-  }
-  if (ctrl.precisaLogar) {
-    return <LoginCliente onLoginSucesso={ctrl.loginSucesso} />;
-  }
-
-  const todosProdutos = ctrl.produtos
-    .filter(p => p.disponivel !== false)
-    .map(p => ({
-      ...p,
-      restaurante: ctrl.restaurantes.find(r => r.id === p.restaurante_id),
-    }))
-    .filter(p => {
-      if (ctrl.categoriaAtiva !== 'todos' && p.restaurante?.categoria !== ctrl.categoriaAtiva) return false;
-      if (ctrl.busca && !p.nome.toLowerCase().includes(ctrl.busca.toLowerCase())) return false;
-      return true;
-    });
-
-  const cartCount = ctrl.carrinho.reduce((a, i) => a + i.quantidade, 0);
-
-  return (
-    <>
-      <style>{FONTS + tokens + animations}</style>
-      <div style={{ minHeight: '100vh', background: 'var(--white)' }}>
-        <Navbar
-          cartCount={cartCount}
-          onCartClick={() => ctrl.setCarrinhoAberto(true)}
-          onHistorico={() => ctrl.setVerHistorico(true)}
-          onLogout={onLogout}
-          usuarioLogado={ctrl.usuarioLogado}
-        />
-        <HeroSection />
-
-        {/* Cardápio */}
-        <section id="cardápio" style={{ padding: '80px 32px', maxWidth: 1280, margin: '0 auto' }}>
-          <div style={{ marginBottom: 12 }}>
-            <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 36, color: 'var(--gray-900)' }}>
-              Nosso <span style={{ color: 'var(--primary)' }}>Cardápio</span>
-            </h2>
-            <p style={{ fontSize: 15, color: 'var(--gray-500)', marginTop: 8 }}>
-              Explore os melhores restaurantes e peça o que quiser.
-            </p>
-          </div>
-
-          {/* Filters */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            margin: '32px 0 40px', flexWrap: 'wrap', gap: 16,
-          }}>
-            <div style={{ display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              {CATEGORIAS.map(cat => (
-                <CategoryPill key={cat.key} emoji={cat.emoji} label={cat.label}
-                  active={ctrl.categoriaAtiva === cat.key}
-                  onClick={() => ctrl.setCategoriaAtiva(cat.key)} />
-              ))}
-            </div>
-            <div style={{ position: 'relative', minWidth: 240 }}>
-              <Search size={16} color="var(--gray-400)"
-                style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-              <input
-                type="text" value={ctrl.busca} placeholder="Buscar produtos..."
-                onChange={e => ctrl.setBusca(e.target.value)}
-                style={{
-                  width: '100%', padding: '11px 16px 11px 40px',
-                  borderRadius: 'var(--radius-full)',
-                  border: '1.5px solid var(--gray-200)', background: 'var(--white)',
-                  fontSize: 14, fontFamily: 'DM Sans, sans-serif',
-                  color: 'var(--gray-900)', outline: 'none',
-                  transition: 'border-color 0.2s, box-shadow 0.2s',
-                }}
-                onFocus={e => { e.target.style.borderColor = 'var(--primary)'; e.target.style.boxShadow = '0 0 0 3px rgba(234,29,44,0.1)'; }}
-                onBlur={e => { e.target.style.borderColor = 'var(--gray-200)'; e.target.style.boxShadow = 'none'; }}
-              />
-            </div>
-          </div>
-
-          {/* Grid */}
-          {todosProdutos.length === 0 ? (
-            <div style={{
-              background: 'var(--gray-50)', borderRadius: 'var(--radius-xl)',
-              padding: '60px 24px', textAlign: 'center', border: '1.5px dashed var(--gray-300)',
-            }}>
-              <p style={{ fontSize: 48, marginBottom: 16 }}>🍽️</p>
-              <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, color: 'var(--gray-900)' }}>
-                Nenhum produto encontrado
-              </p>
-              <p style={{ fontSize: 14, color: 'var(--gray-500)', marginTop: 8 }}>Tente outra busca ou categoria</p>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 24 }}>
-              {todosProdutos.map(prod => (
-                <ProductCard key={prod.id} produto={prod} restaurante={prod.restaurante}
-                  onAdd={ctrl.adicionarAoCarrinho} />
-              ))}
-            </div>
-          )}
-        </section>
-
-        <SobreNos />
-        <FAQSection />
-        <Footer />
-
-        {ctrl.carrinhoAberto && (
-          <CartSlideOver
-            carrinho={ctrl.carrinho} calcularTotal={ctrl.calcularTotal}
-            onClose={() => ctrl.setCarrinhoAberto(false)}
-            onFinalize={() => ctrl.finalizarPedido()} />
-        )}
-      </div>
-    </>
-  );
-}
+};
 
 export default ClienteApp;
