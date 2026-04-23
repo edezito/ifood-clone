@@ -19,6 +19,7 @@ class NotificacaoService {
           email: pedido.email,
           nome: pedido.cliente_nome || 'Cliente',
           pedidoId: pedido.id.toString().slice(0, 8).toUpperCase(),
+          pin: pedido.pin_entrega,
           total: `R$ ${pedido.total?.toFixed(2)}`,
           endereco: pedido.endereco || 'Endereço não informado'
         },
@@ -26,7 +27,15 @@ class NotificacaoService {
 
       if (error) {
         console.error('❌ Erro na Edge Function:', error);
-        throw error;
+        // Tenta obter detalhes do corpo da resposta de erro
+        let detalhe = error.message;
+        if (error.context) {
+          try {
+            const res = await error.context.json?.();
+            if (res?.error) detalhe = res.error;
+          } catch (_) {}
+        }
+        throw new Error(detalhe);
       }
       
       console.log('✅ PIN enviado com sucesso!');
@@ -43,7 +52,6 @@ class NotificacaoService {
   static async notificarMudancaStatus(pedidoId, statusAntigo, statusNovo, pedidoCompleto = null) {
     console.log(`🔔 Pedido #${pedidoId}: ${statusAntigo} → ${statusNovo}`);
 
-    // Salvar notificação
     await supabase.from('notificacoes').insert([{
       pedido_id: pedidoId,
       tipo: 'mudanca_status',
@@ -53,12 +61,10 @@ class NotificacaoService {
       criado_em: new Date()
     }]);
 
-    // Enviar PIN quando estiver em trânsito
     if (statusNovo === 'Em Trânsito') {
       console.log('🚚 Pedido em trânsito! Enviando PIN...');
       
       let pedido = pedidoCompleto;
-      
       if (!pedido) {
         const { data } = await supabase
           .from('pedidos')
