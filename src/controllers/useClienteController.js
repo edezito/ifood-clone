@@ -1,7 +1,7 @@
 // ============================================================
-// CONTROLLER: useClienteController
+// CONTROLLER: useClienteController (ATUALIZADO)
 // Responsabilidade: lógica do app de delivery para clientes.
-// Gerencia carrinho, pedidos e navegação entre telas.
+// Gerencia carrinho, pedidos, navegação, entrega e pagamento.
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
 import { RestauranteModel } from '../models/restauranteModel';
@@ -30,6 +30,9 @@ export function useClienteController() {
   const [carrinho, setCarrinho] = useState([]);
   const [carrinhoAberto, setCarrinhoAberto] = useState(false);
   const [carrinhoPendente, setCarrinhoPendente] = useState(null);
+
+  // ---- Checkout ----
+  const [checkoutAberto, setCheckoutAberto] = useState(false);
 
   // ---- Filtros / UI ----
   const [busca, setBusca] = useState('');
@@ -83,8 +86,8 @@ export function useClienteController() {
       setPrecisaLogar(false);
 
       if (carrinhoPendente) {
-        await finalizarPedido(carrinhoPendente, user);
         setCarrinhoPendente(null);
+        setCheckoutAberto(true);
       } else {
         setCarrinhoAberto(true);
       }
@@ -113,31 +116,57 @@ export function useClienteController() {
     });
   };
 
+  const removerDoCarrinho = (produtoId) => {
+    setCarrinho(prev =>
+      prev
+        .map(i => i.id === produtoId ? { ...i, quantidade: i.quantidade - 1 } : i)
+        .filter(i => i.quantidade > 0)
+    );
+  };
+
+  const limparCarrinho = () => setCarrinho([]);
+
   const calcularTotal = (itens = carrinho) =>
     itens.reduce((acc, item) => acc + item.preco * item.quantidade, 0);
 
   // ----------------------------------------------------------
-  // Finalizar pedido
+  // Iniciar Checkout
   // ----------------------------------------------------------
-  const finalizarPedido = async (carrinhoData, userOverride) => {
-    const carrinhoAtual = carrinhoData ?? carrinho;
-    const usuario = userOverride ?? usuarioLogado;
+  const iniciarCheckout = () => {
+    if (carrinho.length === 0) {
+      alert('Carrinho vazio!');
+      return;
+    }
+    if (!usuarioLogado) {
+      setCarrinhoPendente([...carrinho]);
+      setPrecisaLogar(true);
+      setCarrinhoAberto(false);
+      return;
+    }
+    setCarrinhoAberto(false);
+    setCheckoutAberto(true);
+  };
+
+  // ----------------------------------------------------------
+  // Finalizar pedido (chamado pelo CheckoutModal após confirmação)
+  // ----------------------------------------------------------
+  const finalizarPedido = async ({ tipoEntrega, formaPagamento, total, pedidoId: fakePedidoId } = {}) => {
+    const usuario = usuarioLogado;
 
     if (!usuario) {
-      setCarrinhoPendente(carrinhoAtual);
+      setCarrinhoPendente([...carrinho]);
       setPrecisaLogar(true);
       setCarrinhoAberto(false);
       return;
     }
 
-    if (carrinhoAtual.length === 0) {
+    if (carrinho.length === 0) {
       alert('Carrinho vazio!');
       return;
     }
 
-    const restId = carrinhoAtual[0].restauranteId;
+    const restId = carrinho[0].restauranteId;
     const pin = Math.floor(1000 + Math.random() * 9000).toString();
-    const total = calcularTotal(carrinhoAtual);
 
     try {
       const pedido = await PedidoModel.criar({
@@ -145,17 +174,19 @@ export function useClienteController() {
         cliente_nome: usuario.nome ?? 'Cliente',
         cliente_id: usuario.id,
         total,
-        forma_pagamento: 'Cartão',
-        tipo_entrega: 'Entrega',
+        forma_pagamento: formaPagamento ?? 'Cartão',
+        tipo_entrega: tipoEntrega ?? 'Entrega',
         status: 'Aguardando',
         telefone: usuario.telefone ?? usuario.phone,
         pin_entrega: pin,
         email: usuario.email,
-        endereco: usuario.endereco ?? ENDERECO_PADRAO,
+        endereco: tipoEntrega === 'Retirada'
+          ? 'Retirada no restaurante'
+          : (usuario.endereco ?? ENDERECO_PADRAO),
       });
 
       await ItensPedidoModel.inserirVarios(
-        carrinhoAtual.map((item) => ({
+        carrinho.map((item) => ({
           pedido_id: pedido.id,
           produto_id: item.id,
           quantidade: item.quantidade,
@@ -165,7 +196,7 @@ export function useClienteController() {
 
       setCarrinho([]);
       setCarrinhoPendente(null);
-      setCarrinhoAberto(false);
+      setCheckoutAberto(false);
       setPedidoAtivoId(pedido.id);
     } catch (err) {
       console.error('Erro ao finalizar pedido:', err);
@@ -194,7 +225,13 @@ export function useClienteController() {
     carrinho,
     carrinhoAberto, setCarrinhoAberto,
     adicionarAoCarrinho,
+    removerDoCarrinho,
+    limparCarrinho,
     calcularTotal,
+
+    // Checkout
+    checkoutAberto, setCheckoutAberto,
+    iniciarCheckout,
     finalizarPedido,
 
     // Filtros / UI
