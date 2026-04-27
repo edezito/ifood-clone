@@ -150,57 +150,96 @@ export function useClienteController() {
   // ----------------------------------------------------------
   // Finalizar pedido (chamado pelo CheckoutModal após confirmação)
   // ----------------------------------------------------------
-  const finalizarPedido = async ({ tipoEntrega, formaPagamento, total, pedidoId: fakePedidoId } = {}) => {
+  const finalizarPedido = async ({ 
+    tipoEntrega, 
+    formaPagamento, 
+    total, 
+    pedidoId: fakePedidoId,
+    dadosCartao = null 
+  }) => {
     const usuario = usuarioLogado;
-
+    
     if (!usuario) {
+      // Redirecionar para login
       setCarrinhoPendente([...carrinho]);
       setPrecisaLogar(true);
       setCarrinhoAberto(false);
       return;
     }
 
-    if (carrinho.length === 0) {
-      alert('Carrinho vazio!');
-      return;
-    }
-
-    const restId = carrinho[0].restauranteId;
-    const pin = Math.floor(1000 + Math.random() * 9000).toString();
-
     try {
+      setLoading(true);
+      
+      // 1. Criar o pedido
       const pedido = await PedidoModel.criar({
-        restaurante_id: restId,
+        restaurante_id: carrinho[0].restauranteId,
         cliente_nome: usuario.nome ?? 'Cliente',
         cliente_id: usuario.id,
         total,
-        forma_pagamento: formaPagamento ?? 'Cartão',
-        tipo_entrega: tipoEntrega ?? 'Entrega',
+        forma_pagamento: formaPagamento,
+        tipo_entrega: tipoEntrega,
         status: 'Aguardando',
         telefone: usuario.telefone ?? usuario.phone,
-        pin_entrega: pin,
+        pin_entrega: Math.floor(1000 + Math.random() * 9000).toString(),
         email: usuario.email,
-        endereco: tipoEntrega === 'Retirada'
-          ? 'Retirada no restaurante'
-          : (usuario.endereco ?? ENDERECO_PADRAO),
+        endereco: tipoEntrega === 'Retirada' 
+          ? 'Retirada no restaurante' 
+          : (usuario.endereco ?? ENDERECO_PADRAO)
       });
 
+      // 2. Inserir itens do pedido
       await ItensPedidoModel.inserirVarios(
-        carrinho.map((item) => ({
+        carrinho.map(item => ({
           pedido_id: pedido.id,
           produto_id: item.id,
           quantidade: item.quantidade,
-          preco_unitario: item.preco,
+          preco_unitario: item.preco
         }))
       );
 
+      // 3. Processar pagamento
+      const resultadoPagamento = await PaymentService.processarPagamento({
+        pedidoId: pedido.id,
+        formaPagamento,
+        valor: total,
+        dadosCartao,
+        usuarioLogado: usuario
+      });
+
+      // 4. Atualizar status do pedido baseado no pagamento
+      if (resultadoPagamento.sucesso) {
+        await PedidoModel.atualizarStatus(pedido.id, 'Confirmado');
+        
+        // Se for PIX, permite acompanhar o pagamento
+        if (formaPagamento === 'PIX') {
+          // Armazenar dados do PIX no estado local
+          setPixData({
+            paymentId: resultadoPagamento.pagamento.id,
+            pixCode: resultadoPagamento.pixCode,
+            qrcodeUrl: resultadoPagamento.qrcodeUrl,
+            expiracao: resultadoPagamento.expiracao
+          });
+        }
+      } else {
+        await PedidoModel.atualizarStatus(pedido.id, 'Pagamento Recusado');
+      }
+
+      // 5. Limpar carrinho e atualizar UI
       setCarrinho([]);
       setCarrinhoPendente(null);
       setCheckoutAberto(false);
-      setPedidoAtivoId(pedido.id);
-    } catch (err) {
-      console.error('Erro ao finalizar pedido:', err);
-      alert(`Erro ao fazer pedido: ${err.message}`);
+      
+      if (resultadoPagamento.sucesso) {
+        setPedidoAtivoId(pedido.id);
+      } else {
+        alert('Pagamento não aprovado. Tente novamente.');
+      }
+
+    } catch (error) {
+      console.error('Erro ao finalizar pedido:', error);
+      alert(`Erro ao processar pedido: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
