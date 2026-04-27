@@ -382,7 +382,7 @@ function FAQSection() {
   );
 }
 
-/* ─── Cart Slide-over (atualizado) ──────────────────────── */
+/* ─── Cart Slide-over ──────────────────────────────────────── */
 function CartSlideOver({ carrinho, calcularTotal, onClose, onCheckout, onAdd, onRemove }) {
   const total = calcularTotal();
   const count = carrinho.reduce((a, i) => a + i.quantidade, 0);
@@ -535,10 +535,11 @@ function Footer() {
   );
 }
 
-/* ─── COMPONENTE PRINCIPAL ────────────────────────────────── */
+/* ─── COMPONENTE PRINCIPAL (ÚNICO - SEM DUPLICAÇÃO) ──────── */
 function ClienteApp({ onLogout }) {
   const ctrl = useClienteController();
 
+  // Verificações de estado
   if (ctrl.pedidoAtivoId) {
     return <AcompanhamentoPedido pedidoId={ctrl.pedidoAtivoId} onVoltarAoMenu={() => ctrl.setPedidoAtivoId(null)} />;
   }
@@ -555,6 +556,7 @@ function ClienteApp({ onLogout }) {
     return <LoginCliente onLoginSucesso={ctrl.loginSucesso} />;
   }
 
+  // Produtos filtrados
   const todosProdutos = ctrl.produtos
     .filter(p => p.disponivel !== false)
     .map(p => ({
@@ -568,6 +570,11 @@ function ClienteApp({ onLogout }) {
     });
 
   const cartCount = ctrl.carrinho.reduce((a, i) => a + i.quantidade, 0);
+
+  // Handler para confirmação de pedido
+  const handlePedidoConfirmado = async (dadosCheckout) => {
+    return await ctrl.finalizarPedido(dadosCheckout);
+  };
 
   return (
     <>
@@ -656,14 +663,14 @@ function ClienteApp({ onLogout }) {
           />
         )}
 
-        {/* Checkout Modal com entrega + pagamento */}
+        {/* Checkout Modal */}
         {ctrl.checkoutAberto && (
           <CheckoutModal
             carrinho={ctrl.carrinho}
             calcularTotal={ctrl.calcularTotal}
             usuarioLogado={ctrl.usuarioLogado}
             onClose={() => ctrl.setCheckoutAberto(false)}
-            onPedidoConfirmado={ctrl.finalizarPedido}
+            onPedidoConfirmado={handlePedidoConfirmado}
           />
         )}
       </div>

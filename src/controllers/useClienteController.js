@@ -1,7 +1,5 @@
 // ============================================================
-// CONTROLLER: useClienteController (ATUALIZADO)
-// Responsabilidade: lógica do app de delivery para clientes.
-// Gerencia carrinho, pedidos, navegação, entrega e pagamento.
+// CONTROLLER: useClienteController (CORRIGIDO)
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
 import { RestauranteModel } from '../models/restauranteModel';
@@ -10,6 +8,7 @@ import { PedidoModel } from '../models/pedidoModel';
 import { ItensPedidoModel } from '../models/itensPedidoModel';
 import { ClienteModel } from '../models/clienteModel';
 import { AuthModel } from '../models/authModel';
+import { PaymentService } from '../services/paymentservice';
 
 const ENDERECO_PADRAO = 'Rua Augusta, 123 - Consolação';
 
@@ -38,6 +37,10 @@ export function useClienteController() {
   const [busca, setBusca] = useState('');
   const [categoriaAtiva, setCategoriaAtiva] = useState('todos');
   const [restauranteExpandido, setRestauranteExpandido] = useState(null);
+
+  // ---- Estados de loading e PIX ----
+  const [loading, setLoading] = useState(false);
+  const [pixData, setPixData] = useState(null);
 
   // ----------------------------------------------------------
   // Inicialização
@@ -148,23 +151,32 @@ export function useClienteController() {
   };
 
   // ----------------------------------------------------------
-  // Finalizar pedido (chamado pelo CheckoutModal após confirmação)
+  // Finalizar pedido (CORRIGIDO - Passa carrinho e tipoEntrega)
   // ----------------------------------------------------------
   const finalizarPedido = async ({ 
     tipoEntrega, 
     formaPagamento, 
     total, 
-    pedidoId: fakePedidoId,
-    dadosCartao = null 
+    dadosCartao = null,
+    acao = null,
+    pedidoId = null
   }) => {
+    // Se for ação de acompanhar, apenas navega
+    if (acao === 'acompanhar') {
+      setCheckoutAberto(false);
+      setCarrinho([]);
+      setCarrinhoPendente(null);
+      setPedidoAtivoId(pedidoId);
+      return { sucesso: true, acao: 'acompanhar' };
+    }
+
     const usuario = usuarioLogado;
     
     if (!usuario) {
-      // Redirecionar para login
       setCarrinhoPendente([...carrinho]);
       setPrecisaLogar(true);
       setCarrinhoAberto(false);
-      return;
+      return { sucesso: false, mensagem: 'Usuário não logado' };
     }
 
     try {
@@ -197,90 +209,88 @@ export function useClienteController() {
         }))
       );
 
-      // 3. Processar pagamento
+      // 3. Processar pagamento - AGORA COM CARRINHO E TIPO ENTREGA!
       const resultadoPagamento = await PaymentService.processarPagamento({
         pedidoId: pedido.id,
-        formaPagamento,
+        formaPagamento: formaPagamento,
         valor: total,
-        dadosCartao,
-        usuarioLogado: usuario
+        dadosCartao: dadosCartao,
+        usuarioLogado: usuario,
+        carrinho: carrinho,        // ✅ ADICIONADO
+        tipoEntrega: tipoEntrega   // ✅ ADICIONADO
       });
 
-      // 4. Atualizar status do pedido baseado no pagamento
+      // 4. Atualizar status do pedido baseado no resultado
       if (resultadoPagamento.sucesso) {
         await PedidoModel.atualizarStatus(pedido.id, 'Confirmado');
         
-        // Se for PIX, permite acompanhar o pagamento
-        if (formaPagamento === 'PIX') {
-          // Armazenar dados do PIX no estado local
-          setPixData({
-            paymentId: resultadoPagamento.pagamento.id,
-            pixCode: resultadoPagamento.pixCode,
-            qrcodeUrl: resultadoPagamento.qrcodeUrl,
-            expiracao: resultadoPagamento.expiracao
-          });
-        }
+        return {
+          sucesso: true,
+          pedido: pedido,
+          pagamento: resultadoPagamento.pagamento,
+          pixCode: resultadoPagamento.pixCode,
+          qrcodeUrl: resultadoPagamento.qrcodeUrl,
+          expiracao: resultadoPagamento.expiracao,
+          preferenceId: resultadoPagamento.preferenceId, // ✅ Para Mercado Pago
+          initPoint: resultadoPagamento.initPoint         // ✅ Para Mercado Pago
+        };
       } else {
         await PedidoModel.atualizarStatus(pedido.id, 'Pagamento Recusado');
-      }
-
-      // 5. Limpar carrinho e atualizar UI
-      setCarrinho([]);
-      setCarrinhoPendente(null);
-      setCheckoutAberto(false);
-      
-      if (resultadoPagamento.sucesso) {
-        setPedidoAtivoId(pedido.id);
-      } else {
-        alert('Pagamento não aprovado. Tente novamente.');
+        
+        return {
+          sucesso: false,
+          mensagem: resultadoPagamento.mensagem || 'Pagamento recusado. Tente novamente.',
+          pedido: pedido
+        };
       }
 
     } catch (error) {
       console.error('Erro ao finalizar pedido:', error);
-      alert(`Erro ao processar pedido: ${error.message}`);
+      return {
+        sucesso: false,
+        mensagem: `Erro ao processar pedido: ${error.message}`
+      };
     } finally {
       setLoading(false);
     }
   };
 
-  // ----------------------------------------------------------
-  // Restaurante expandido (toggle)
-  // ----------------------------------------------------------
   const toggleRestaurante = (id) =>
     setRestauranteExpandido((prev) => (prev === id ? null : id));
 
+  // ----------------------------------------------------------
+  // RETORNO
+  // ----------------------------------------------------------
   return {
-    // Dados
     restaurantes,
     produtos,
     usuarioLogado,
-
-    // Navegação
-    pedidoAtivoId, setPedidoAtivoId,
-    verHistorico, setVerHistorico,
+    pedidoAtivoId, 
+    setPedidoAtivoId,
+    verHistorico, 
+    setVerHistorico,
     precisaLogar,
-
-    // Carrinho
     carrinho,
-    carrinhoAberto, setCarrinhoAberto,
+    carrinhoAberto, 
+    setCarrinhoAberto,
     adicionarAoCarrinho,
     removerDoCarrinho,
     limparCarrinho,
     calcularTotal,
-
-    // Checkout
-    checkoutAberto, setCheckoutAberto,
+    checkoutAberto, 
+    setCheckoutAberto,
     iniciarCheckout,
     finalizarPedido,
-
-    // Filtros / UI
-    busca, setBusca,
-    categoriaAtiva, setCategoriaAtiva,
+    busca, 
+    setBusca,
+    categoriaAtiva, 
+    setCategoriaAtiva,
     restauranteExpandido,
     toggleRestaurante,
-
-    // Auth
     loginSucesso,
     logout,
+    loading, 
+    pixData,
+    setPixData
   };
 }
