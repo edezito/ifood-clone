@@ -82,8 +82,8 @@ export const StatusModel = {
       'Em Preparação→Em Trânsito': 'Seu pedido saiu para entrega! 🛵',
       'Em Trânsito→Entregue':     'Pedido entregue! Bom apetite! 🎉',
     };
-    const chave = ${this.normalizar(statusAntigo)}→${this.normalizar(statusNovo)};
-    return mensagens[chave] || Status atualizado para: ${this.normalizar(statusNovo)};
+    const chave = `${this.normalizar(statusAntigo)}→${this.normalizar(statusNovo)}`;
+    return mensagens[chave] || `Status atualizado para: ${this.normalizar(statusNovo)}`;
   },
 };
 
