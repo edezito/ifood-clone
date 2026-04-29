@@ -1,13 +1,12 @@
 // ============================================================
-// COMPONENT: CheckoutModal
-// Responsabilidade: Modal de checkout com seleção de entrega,
-// forma de pagamento e processamento
+// COMPONENT: CheckoutModal (ATUALIZADO)
 // ============================================================
 import React, { useState, useEffect } from 'react';
 import {
   X, Truck, Store, CreditCard, QrCode,
   ChevronRight, CheckCircle, ArrowLeft, Copy, Clock,
-  MapPin, Shield, Zap, RefreshCw, ShoppingCart, Plus, Minus
+  MapPin, Shield, Zap, RefreshCw, ShoppingCart, Plus, Minus,
+  ExternalLink
 } from 'lucide-react';
 import StepPagamento from './StepPagamento';
 
@@ -91,7 +90,7 @@ function ProgressBar({ step }) {
   );
 }
 
-// Step: Resumo do Pedido
+// Step: Resumo do Pedido (MANTIDO IGUAL)
 function StepResumo({ carrinho, calcularTotal, endereco, onNext }) {
   const subtotal = calcularTotal();
   const taxa = 4.99;
@@ -106,7 +105,6 @@ function StepResumo({ carrinho, calcularTotal, endereco, onNext }) {
         Resumo do Pedido
       </h3>
 
-      {/* Itens */}
       <div style={{
         background: '#f9fafb', borderRadius: 14, padding: '4px 16px',
         marginBottom: 20, border: '1px solid #e5e7eb',
@@ -133,7 +131,6 @@ function StepResumo({ carrinho, calcularTotal, endereco, onNext }) {
         ))}
       </div>
 
-      {/* Totais */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#6b7280' }}>
           <span>Subtotal</span>
@@ -154,7 +151,6 @@ function StepResumo({ carrinho, calcularTotal, endereco, onNext }) {
         </div>
       </div>
 
-      {/* Endereço */}
       {endereco && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10,
@@ -185,25 +181,11 @@ function StepResumo({ carrinho, calcularTotal, endereco, onNext }) {
   );
 }
 
-// Step: Tipo de Entrega
+// Step: Tipo de Entrega (MANTIDO IGUAL)
 function StepEntrega({ tipoEntrega, setTipoEntrega, onNext, onBack }) {
   const options = [
-    {
-      key: 'Entrega',
-      icon: Truck,
-      label: 'Receber em casa',
-      desc: 'Entrega no seu endereço — ~35 min',
-      color: '#EA1D2C',
-      bg: '#FFF0F0',
-    },
-    {
-      key: 'Retirada',
-      icon: Store,
-      label: 'Retirar no restaurante',
-      desc: 'Retire pessoalmente — ~15 min',
-      color: '#50A773',
-      bg: '#E8F5EE',
-    },
+    { key: 'Entrega', icon: Truck, label: 'Receber em casa', desc: 'Entrega no seu endereço — ~35 min', color: '#EA1D2C', bg: '#FFF0F0' },
+    { key: 'Retirada', icon: Store, label: 'Retirar no restaurante', desc: 'Retire pessoalmente — ~15 min', color: '#50A773', bg: '#E8F5EE' },
   ];
 
   return (
@@ -218,29 +200,20 @@ function StepEntrega({ tipoEntrega, setTipoEntrega, onNext, onBack }) {
         <ArrowLeft size={14} /> Voltar
       </button>
 
-      <h3 style={{
-        fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18,
-        color: '#1f2937', margin: '16px 0 8px',
-      }}>
+      <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18, color: '#1f2937', margin: '16px 0 8px' }}>
         Como quer receber?
       </h3>
-      <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 24 }}>
-        Escolha a modalidade de entrega
-      </p>
+      <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 24 }}>Escolha a modalidade de entrega</p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
         {options.map(({ key, icon: Icon, label, desc, color, bg }) => (
-          <button
-            key={key}
-            onClick={() => setTipoEntrega(key)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 16,
-              padding: '18px 20px', borderRadius: 16, cursor: 'pointer',
-              border: `2px solid ${tipoEntrega === key ? color : '#e5e7eb'}`,
-              background: tipoEntrega === key ? bg : '#fff',
-              transition: 'all 0.2s', textAlign: 'left', width: '100%',
-            }}
-          >
+          <button key={key} onClick={() => setTipoEntrega(key)} style={{
+            display: 'flex', alignItems: 'center', gap: 16,
+            padding: '18px 20px', borderRadius: 16, cursor: 'pointer',
+            border: `2px solid ${tipoEntrega === key ? color : '#e5e7eb'}`,
+            background: tipoEntrega === key ? bg : '#fff',
+            transition: 'all 0.2s', textAlign: 'left', width: '100%',
+          }}>
             <div style={{
               width: 48, height: 48, borderRadius: 14, flexShrink: 0,
               background: tipoEntrega === key ? color : '#f3f4f6',
@@ -249,15 +222,10 @@ function StepEntrega({ tipoEntrega, setTipoEntrega, onNext, onBack }) {
               <Icon size={22} color={tipoEntrega === key ? '#fff' : '#9ca3af'} />
             </div>
             <div style={{ flex: 1 }}>
-              <p style={{
-                fontSize: 15, fontWeight: 700,
-                color: tipoEntrega === key ? color : '#1f2937',
-              }}>{label}</p>
+              <p style={{ fontSize: 15, fontWeight: 700, color: tipoEntrega === key ? color : '#1f2937' }}>{label}</p>
               <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{desc}</p>
             </div>
-            {tipoEntrega === key && (
-              <CheckCircle size={20} color={color} style={{ flexShrink: 0 }} />
-            )}
+            {tipoEntrega === key && <CheckCircle size={20} color={color} style={{ flexShrink: 0 }} />}
           </button>
         ))}
       </div>
@@ -277,22 +245,15 @@ function StepEntrega({ tipoEntrega, setTipoEntrega, onNext, onBack }) {
   );
 }
 
-// Step: Processando PIX
+// Step: Processando PIX (MANTIDO IGUAL)
 function StepProcessandoPIX({ pixCode, qrcodeUrl, expiracao, total, onPixConfirmado, onCancelar }) {
   const [pixCopied, setPixCopied] = useState(false);
   const [timeLeft, setTimeLeft] = useState(expiracao || 300);
   
   useEffect(() => {
     const timer = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return t - 1;
-      });
+      setTimeLeft(t => { if (t <= 1) { clearInterval(timer); return 0; } return t - 1; });
     }, 1000);
-    
     return () => clearInterval(timer);
   }, []);
 
@@ -304,12 +265,9 @@ function StepProcessandoPIX({ pixCode, qrcodeUrl, expiracao, total, onPixConfirm
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText(pixCode).catch(() => {
-      const ta = document.createElement('textarea');
-      ta.value = pixCode;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
+      const ta = document.createElement('textarea'); ta.value = pixCode;
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
     });
     setPixCopied(true);
     setTimeout(() => setPixCopied(false), 3000);
@@ -317,93 +275,101 @@ function StepProcessandoPIX({ pixCode, qrcodeUrl, expiracao, total, onPixConfirm
 
   return (
     <div style={{ textAlign: 'center', padding: '20px 0', animation: 'slideStep 0.3s ease-out' }}>
-      <div style={{
-        display: 'inline-flex', alignItems: 'center', gap: 8,
-        background: '#E8F5EE', border: '1px solid #a7f3d0',
-        borderRadius: 99, padding: '6px 16px', marginBottom: 20,
-        fontSize: 12, fontWeight: 700, color: '#065f46',
-      }}>
-        <div style={{
-          width: 8, height: 8, borderRadius: '50%', 
-          background: '#10b981',
-          animation: 'pixPulse 2s infinite',
-        }} />
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: '#E8F5EE', border: '1px solid #a7f3d0', borderRadius: 99, padding: '6px 16px', marginBottom: 20, fontSize: 12, fontWeight: 700, color: '#065f46' }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', animation: 'pixPulse 2s infinite' }} />
         Aguardando pagamento PIX
       </div>
-
-      <h3 style={{
-        fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: 20,
-        color: '#1f2937', marginBottom: 16,
-      }}>
-        Escaneie o QR Code
-      </h3>
-
-      {/* Timer */}
-      <div style={{
-        color: timeLeft < 60 ? '#ef4444' : '#6b7280',
-        fontWeight: 600, marginBottom: 8,
-      }}>
-        <Clock size={14} style={{ marginRight: 4, display: 'inline' }} />
-        Expira em {formatTime(timeLeft)}
+      <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: 20, color: '#1f2937', marginBottom: 16 }}>Escaneie o QR Code</h3>
+      <div style={{ color: timeLeft < 60 ? '#ef4444' : '#6b7280', fontWeight: 600, marginBottom: 8 }}>
+        <Clock size={14} style={{ marginRight: 4, display: 'inline' }} /> Expira em {formatTime(timeLeft)}
       </div>
-
-      {/* QR Code */}
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
-        <img 
-          src={qrcodeUrl} 
-          alt="QR Code PIX" 
-          style={{ 
-            width: 200, 
-            height: 200, 
-            borderRadius: 12, 
-            border: '2px solid #e5e7eb'
-          }}
-        />
+        <img src={qrcodeUrl} alt="QR Code PIX" style={{ width: 200, height: 200, borderRadius: 12, border: '2px solid #e5e7eb' }} />
       </div>
-
-      {/* Código PIX */}
-      <div style={{
-        background: '#f9fafb', borderRadius: 12, padding: '12px 14px',
-        border: '1px solid #e5e7eb', marginBottom: 16, textAlign: 'left',
-      }}>
-        <p style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', marginBottom: 6 }}>
-          PIX Copia e Cola
-        </p>
-        <p style={{
-          fontSize: 10, color: '#374151', wordBreak: 'break-all',
-          fontFamily: 'monospace', lineHeight: 1.5,
-          maxHeight: 60, overflow: 'hidden',
-        }}>
-          {pixCode}
-        </p>
+      <div style={{ background: '#f9fafb', borderRadius: 12, padding: '12px 14px', border: '1px solid #e5e7eb', marginBottom: 16, textAlign: 'left' }}>
+        <p style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', marginBottom: 6 }}>PIX Copia e Cola</p>
+        <p style={{ fontSize: 10, color: '#374151', wordBreak: 'break-all', fontFamily: 'monospace', lineHeight: 1.5, maxHeight: 60, overflow: 'hidden' }}>{pixCode}</p>
       </div>
-
       <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={handleCopyPix} style={{
-          flex: 1, padding: '12px', borderRadius: 12,
-          border: '2px solid #e5e7eb', background: pixCopied ? '#E8F5EE' : '#fff',
-          color: pixCopied ? '#065f46' : '#374151',
-          fontWeight: 700, fontSize: 13, cursor: 'pointer',
-          fontFamily: "'DM Sans', sans-serif",
-        }}>
+        <button onClick={handleCopyPix} style={{ flex: 1, padding: '12px', borderRadius: 12, border: '2px solid #e5e7eb', background: pixCopied ? '#E8F5EE' : '#fff', color: pixCopied ? '#065f46' : '#374151', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
           {pixCopied ? <CheckCircle size={15} style={{ marginRight: 4 }} /> : <Copy size={15} style={{ marginRight: 4 }} />}
           {pixCopied ? 'Copiado!' : 'Copiar código'}
         </button>
-        <button onClick={onPixConfirmado} style={{
-          flex: 1, padding: '12px', borderRadius: 12,
-          background: '#50A773', color: '#fff',
-          fontWeight: 700, fontSize: 13, cursor: 'pointer',
-          border: 'none', fontFamily: "'DM Sans', sans-serif",
-        }}>
-          <CheckCircle size={15} style={{ marginRight: 4 }} />
-          Já paguei!
+        <button onClick={onPixConfirmado} style={{ flex: 1, padding: '12px', borderRadius: 12, background: '#50A773', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', border: 'none', fontFamily: "'DM Sans', sans-serif" }}>
+          <CheckCircle size={15} style={{ marginRight: 4 }} /> Já paguei!
         </button>
       </div>
     </div>
   );
 }
 
-// Step: Confirmado
+// 🆕 Step: Processando Mercado Pago (NOVO!)
+function StepProcessandoMP({ initPoint, total, onCancelar }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '20px 0', animation: 'slideStep 0.3s ease-out' }}>
+      <div style={{
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        background: '#E3F2FD', border: '1px solid #90CAF9',
+        borderRadius: 99, padding: '6px 16px', marginBottom: 20,
+        fontSize: 12, fontWeight: 700, color: '#1565C0',
+      }}>
+        💳 Pagamento via Mercado Pago
+      </div>
+
+      <h3 style={{
+        fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: 20,
+        color: '#1f2937', marginBottom: 16,
+      }}>
+        Finalizar Pagamento
+      </h3>
+
+      <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 24, lineHeight: 1.6 }}>
+        Você será redirecionado para o Mercado Pago.<br />
+        Lá você pode pagar com <strong>PIX, Cartão ou Boleto</strong>.
+      </p>
+
+      {/* Botão para pagar */}
+      <a
+        href={initPoint}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '16px 32px',
+          background: 'linear-gradient(135deg, #009EE3, #007BB5)',
+          color: '#fff',
+          borderRadius: 14,
+          textDecoration: 'none',
+          fontWeight: 800,
+          fontSize: 16,
+          fontFamily: "'DM Sans', sans-serif",
+          boxShadow: '0 6px 20px rgba(0,158,227,0.35)',
+          marginBottom: 16,
+        }}
+      >
+        <ExternalLink size={18} />
+        Pagar {formatCurrency(total)}
+      </a>
+
+      <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 20 }}>
+        Após o pagamento, você será redirecionado de volta
+      </p>
+
+      <button onClick={onCancelar} style={{
+        width: '100%', padding: '12px', borderRadius: 12,
+        background: '#f3f4f6', border: 'none',
+        color: '#6b7280', fontWeight: 600, fontSize: 13,
+        cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+      }}>
+        Cancelar e voltar
+      </button>
+    </div>
+  );
+}
+
+// Step: Confirmado (MANTIDO IGUAL)
 function StepConfirmado({ pedidoId, formaPagamento, tipoEntrega, total, onClose }) {
   return (
     <div style={{ textAlign: 'center', animation: 'slideStep 0.3s ease-out' }}>
@@ -411,29 +377,17 @@ function StepConfirmado({ pedidoId, formaPagamento, tipoEntrega, total, onClose 
         width: 80, height: 80, borderRadius: '50%',
         background: 'linear-gradient(135deg, #50A773, #34d399)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        margin: '0 auto 20px',
-        boxShadow: '0 8px 24px rgba(80,167,115,0.4)',
+        margin: '0 auto 20px', boxShadow: '0 8px 24px rgba(80,167,115,0.4)',
       }}>
         <CheckCircle size={42} color="#fff" strokeWidth={2.5} />
       </div>
-
-      <h3 style={{
-        fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: 24,
-        color: '#1f2937', marginBottom: 8,
-      }}>
+      <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: 24, color: '#1f2937', marginBottom: 8 }}>
         Pedido Confirmado! 🎉
       </h3>
       <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 28 }}>
-        {tipoEntrega === 'Entrega'
-          ? 'Estamos preparando seu pedido para entrega'
-          : 'Prepare-se para ir buscar seu pedido'}
+        {tipoEntrega === 'Entrega' ? 'Estamos preparando seu pedido para entrega' : 'Prepare-se para ir buscar seu pedido'}
       </p>
-
-      <div style={{
-        background: '#f9fafb', borderRadius: 16, padding: '16px 20px',
-        border: '1px solid #e5e7eb', marginBottom: 24, textAlign: 'left',
-        display: 'flex', flexDirection: 'column', gap: 10,
-      }}>
+      <div style={{ background: '#f9fafb', borderRadius: 16, padding: '16px 20px', border: '1px solid #e5e7eb', marginBottom: 24, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {[
           { label: 'Pedido', value: `#${pedidoId?.toString().slice(0,8).toUpperCase() || 'FE001234'}` },
           { label: 'Pagamento', value: formaPagamento },
@@ -447,7 +401,6 @@ function StepConfirmado({ pedidoId, formaPagamento, tipoEntrega, total, onClose 
           </div>
         ))}
       </div>
-
       <button onClick={onClose} style={{
         width: '100%', padding: '15px', borderRadius: 14, border: 'none',
         background: 'linear-gradient(135deg, #EA1D2C, #C8101E)',
@@ -479,8 +432,6 @@ export default function CheckoutModal({
   const [pedidoId, setPedidoId] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  // Estados para controle
   const [resultadoPedido, setResultadoPedido] = useState(null);
   const [pixData, setPixData] = useState(null);
 
@@ -489,11 +440,7 @@ export default function CheckoutModal({
   const desconto = formaPagamento === 'PIX' ? (subtotal + taxa) * 0.05 : 0;
   const totalComTaxa = subtotal + taxa;
 
-  const handleResumoNext = (tot) => {
-    setTotal(tot);
-    setStep('entrega');
-  };
-
+  const handleResumoNext = (tot) => { setTotal(tot); setStep('entrega'); };
   const handleEntregaNext = () => setStep('pagamento');
 
   const handlePagamentoNext = async (cd) => {
@@ -501,14 +448,11 @@ export default function CheckoutModal({
     const desc = formaPagamento === 'PIX' ? totalComTaxa * 0.05 : 0;
     const tf = totalComTaxa - desc;
     setTotalFinal(tf);
-    
-    // Iniciar processamento
     setStep('processando');
     setLoading(true);
     setErrorMsg('');
 
     try {
-      // Chamar a função de finalizar pedido do controller
       const resultado = await onPedidoConfirmado({
         tipoEntrega,
         formaPagamento,
@@ -522,21 +466,27 @@ export default function CheckoutModal({
         setPedidoId(resultado.pedido.id);
         
         if (formaPagamento === 'PIX') {
-          // Para PIX, mostrar a tela de processamento com QR Code
           setPixData({
-            paymentId: resultado.pagamento.id,
+            paymentId: resultado.pagamento?.id,
             pixCode: resultado.pixCode,
             qrcodeUrl: resultado.qrcodeUrl,
-            expiracao: resultado.expiracao
+            expiracao: resultado.expiracao,
+            initPoint: resultado.initPoint,
+            preferenceId: resultado.preferenceId
           });
-          // Mantém na tela de processamento
+        } else if (formaPagamento === 'Mercado Pago') {
+          // 🆕 Para MP, mostrar botão de pagamento
+          setPixData({
+            initPoint: resultado.initPoint,
+            preferenceId: resultado.preferenceId
+          });
         } else {
-          // Para Cartão e Dinheiro, avançar direto para confirmação
+          // Cartão ou Dinheiro → confirmar direto
           setStep('confirmado');
         }
       } else {
         setErrorMsg(resultado.mensagem);
-        setStep('pagamento'); // Voltar para tentar novamente
+        setStep('pagamento');
       }
     } catch (error) {
       console.error('Erro ao processar pagamento:', error);
@@ -547,163 +497,77 @@ export default function CheckoutModal({
     }
   };
 
-  const handlePixConfirmado = () => {
-    setStep('confirmado');
-  };
-
+  const handlePixConfirmado = () => setStep('confirmado');
+  
   const handleFecharEAcompanhar = () => {
-    // Limpar carrinho e fechar checkout
     if (onPedidoConfirmado) {
-      onPedidoConfirmado({
-        tipoEntrega,
-        formaPagamento,
-        total: totalFinal,
-        acao: 'acompanhar',
-        pedidoId: pedidoId
-      });
+      onPedidoConfirmado({ tipoEntrega, formaPagamento, total: totalFinal, acao: 'acompanhar', pedidoId });
     }
     onClose();
   };
 
-  const handleFechar = () => {
-    // Apenas fechar sem limpar (caso de erro)
-    onClose();
-  };
+  const handleFechar = () => onClose();
 
   return (
     <>
       <style>{CHECKOUT_STYLES}</style>
-
-      <div
-        onClick={step !== 'processando' ? handleFechar : undefined}
-        style={{
-          position: 'fixed', inset: 0, zIndex: 70,
-          background: 'rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '16px',
-        }}
-      >
-        <div
-          onClick={e => e.stopPropagation()}
-          style={{
-            background: '#fff', borderRadius: 24,
-            width: '100%', maxWidth: 480,
-            maxHeight: '90vh', overflowY: 'auto',
-            padding: '28px 28px 32px',
-            animation: 'modalIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
-            boxShadow: '0 24px 60px rgba(0,0,0,0.2)',
-            position: 'relative',
-          }}
-        >
-          {/* Close button - só mostra se não estiver processando */}
+      <div onClick={step !== 'processando' ? handleFechar : undefined} style={{
+        position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.5)',
+        backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', padding: '16px',
+      }}>
+        <div onClick={e => e.stopPropagation()} style={{
+          background: '#fff', borderRadius: 24, width: '100%', maxWidth: 480,
+          maxHeight: '90vh', overflowY: 'auto', padding: '28px 28px 32px',
+          animation: 'modalIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          boxShadow: '0 24px 60px rgba(0,0,0,0.2)', position: 'relative',
+        }}>
           {step !== 'processando' && (
-            <button onClick={handleFechar} style={{
-              position: 'absolute', top: 16, right: 16,
-              width: 32, height: 32, borderRadius: 8, border: 'none',
-              background: '#f3f4f6', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
+            <button onClick={handleFechar} style={{ position: 'absolute', top: 16, right: 16, width: 32, height: 32, borderRadius: 8, border: 'none', background: '#f3f4f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <X size={15} color="#6b7280" />
             </button>
           )}
 
-          {/* Header */}
           <div style={{ marginBottom: 24 }}>
-            <p style={{
-              fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: 20,
-              color: '#1f2937',
-            }}>
+            <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: 20, color: '#1f2937' }}>
               {step === 'confirmado' ? '✅ Pedido Confirmado' : '🛒 Finalizar Pedido'}
             </p>
           </div>
 
-          {/* Progress */}
-          {['resumo', 'entrega', 'pagamento'].includes(step) && (
-            <ProgressBar step={step} />
-          )}
+          {['resumo', 'entrega', 'pagamento'].includes(step) && <ProgressBar step={step} />}
 
-          {/* Error */}
           {errorMsg && (
-            <div style={{
-              background: '#fef2f2', border: '1px solid #fecaca',
-              borderRadius: 12, padding: '12px 16px',
-              fontSize: 13, color: '#991b1b', fontWeight: 600,
-              marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center',
-            }}>
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '12px 16px', fontSize: 13, color: '#991b1b', fontWeight: 600, marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
               ⚠️ {errorMsg}
-              <button onClick={() => setErrorMsg('')} style={{ 
-                background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto' 
-              }}>
-                <X size={14} color="#991b1b" />
-              </button>
+              <button onClick={() => setErrorMsg('')} style={{ background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto' }}><X size={14} color="#991b1b" /></button>
             </div>
           )}
 
-          {/* Steps */}
-          {step === 'resumo' && (
-            <StepResumo
-              carrinho={carrinho}
-              calcularTotal={calcularTotal}
-              endereco={usuarioLogado?.endereco}
-              onNext={handleResumoNext}
-            />
-          )}
-
-          {step === 'entrega' && (
-            <StepEntrega
-              tipoEntrega={tipoEntrega}
-              setTipoEntrega={setTipoEntrega}
-              onNext={handleEntregaNext}
-              onBack={() => setStep('resumo')}
-            />
-          )}
-
-          {step === 'pagamento' && (
-            <StepPagamento
-              formaPagamento={formaPagamento}
-              setFormaPagamento={setFormaPagamento}
-              onNext={handlePagamentoNext}
-              onBack={() => setStep('entrega')}
-              total={totalComTaxa}
-              loading={loading}
-            />
-          )}
-
+          {step === 'resumo' && <StepResumo carrinho={carrinho} calcularTotal={calcularTotal} endereco={usuarioLogado?.endereco} onNext={handleResumoNext} />}
+          {step === 'entrega' && <StepEntrega tipoEntrega={tipoEntrega} setTipoEntrega={setTipoEntrega} onNext={handleEntregaNext} onBack={() => setStep('resumo')} />}
+          {step === 'pagamento' && <StepPagamento formaPagamento={formaPagamento} setFormaPagamento={setFormaPagamento} onNext={handlePagamentoNext} onBack={() => setStep('entrega')} total={totalComTaxa} loading={loading} />}
+          
+          {/* PIX */}
           {step === 'processando' && formaPagamento === 'PIX' && pixData && (
-            <StepProcessandoPIX
-              pixCode={pixData.pixCode}
-              qrcodeUrl={pixData.qrcodeUrl}
-              expiracao={pixData.expiracao}
-              total={totalFinal}
-              onPixConfirmado={handlePixConfirmado}
-              onCancelar={handleFechar}
-            />
+            <StepProcessandoPIX pixCode={pixData.pixCode} qrcodeUrl={pixData.qrcodeUrl} expiracao={pixData.expiracao} total={totalFinal} onPixConfirmado={handlePixConfirmado} onCancelar={handleFechar} />
           )}
 
-          {step === 'processando' && formaPagamento !== 'PIX' && loading && (
+          {/* 🆕 MERCADO PAGO */}
+          {step === 'processando' && formaPagamento === 'Mercado Pago' && pixData?.initPoint && (
+            <StepProcessandoMP initPoint={pixData.initPoint} total={totalFinal} onCancelar={() => setStep('pagamento')} />
+          )}
+
+          {/* Cartão / Dinheiro (loading) */}
+          {step === 'processando' && formaPagamento !== 'PIX' && formaPagamento !== 'Mercado Pago' && loading && (
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <div style={{
-                width: 60, height: 60, borderRadius: '50%',
-                border: '4px solid #e5e7eb', borderTopColor: '#EA1D2C',
-                margin: '0 auto 20px',
-                animation: 'spin 0.8s linear infinite',
-              }} />
+              <div style={{ width: 60, height: 60, borderRadius: '50%', border: '4px solid #e5e7eb', borderTopColor: '#EA1D2C', margin: '0 auto 20px', animation: 'spin 0.8s linear infinite' }} />
               <p style={{ fontSize: 16, fontWeight: 600, color: '#374151' }}>
                 {formaPagamento === 'Cartão' ? 'Processando pagamento...' : 'Confirmando pedido...'}
               </p>
             </div>
           )}
 
-          {step === 'confirmado' && (
-            <StepConfirmado
-              pedidoId={pedidoId}
-              formaPagamento={formaPagamento}
-              tipoEntrega={tipoEntrega}
-              total={totalFinal}
-              onClose={handleFecharEAcompanhar}
-            />
-          )}
+          {step === 'confirmado' && <StepConfirmado pedidoId={pedidoId} formaPagamento={formaPagamento} tipoEntrega={tipoEntrega} total={totalFinal} onClose={handleFecharEAcompanhar} />}
         </div>
       </div>
     </>
