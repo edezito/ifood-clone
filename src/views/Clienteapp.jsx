@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useClienteController } from '../controllers/useClienteController';
 import AcompanhamentoPedido from './Acompanhamentopedido';
-import HistoricoPedidos from './historicopedidos';
+import HistoricoPedidos from './Historicopedidos';
 import LoginCliente from './Logincliente';
 import CheckoutModal from './checkout';
 
