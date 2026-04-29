@@ -2,8 +2,8 @@
 // MODEL: Auth
 // Responsabilidade: autenticação via Supabase (OTP) e Firebase
 // ============================================================
-import { supabase } from '../services/Supabaseclient ';
-import { auth, googleProvider } from '../services/Firebaseclient ';
+import { supabase } from '../services/Supabaseclient';
+import { auth, googleProvider } from '../services/Firebaseclient';
 import {
   signInWithPopup,
   signInWithEmailAndPassword,

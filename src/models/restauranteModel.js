@@ -2,7 +2,7 @@
 // MODEL: Restaurante
 // Responsabilidade: toda comunicação com Supabase para restaurantes
 // ============================================================
-import { supabase } from '../services/Supabaseclient ';
+import { supabase } from '../services/Supabaseclient';
 
 export const RestauranteModel = {
   async listarTodos() {
