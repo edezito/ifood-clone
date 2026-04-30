@@ -170,13 +170,16 @@ export const PaymentService = {
 
       console.log('✅ Preferência criada:', preferencia.preferenceId);
 
+      // 🔴 Corrigido: Fallback duplo para o link de pagamento
+      const linkPagamento = preferencia.initPoint ?? preferencia.sandboxInitPoint;
+
       const pagamentoCriado = await PagamentoModel.criar({
         ...pagamento,
         status: 'pendente',
         extras: {
           gateway: 'mercadopago',
           preference_id: preferencia.preferenceId,
-          init_point: preferencia.initPoint
+          init_point: linkPagamento // Usa a variável com fallback
         }
       });
 
@@ -184,7 +187,7 @@ export const PaymentService = {
         sucesso: true,
         pagamento: pagamentoCriado,
         preferenceId: preferencia.preferenceId,
-        initPoint: preferencia.initPoint,
+        initPoint: linkPagamento, // Retorna a variável com fallback
         aguardandoConfirmacao: true
       };
     } catch (error) {
