@@ -2,7 +2,7 @@
 // VIEW: ClienteApp (ATUALIZADO) — FoodExpress
 // Integra CheckoutModal com seleção de entrega e pagamento
 // ============================================================
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Search, ShoppingCart, Plus, X, ChevronDown,
   Clock, MapPin, LogOut, ArrowRight, Utensils, Truck, Award,
@@ -134,13 +134,13 @@ function Navbar({ cartCount, onCartClick, onHistorico, onLogout, usuarioLogado }
           >
             <Clock size={16} /> Pedidos
           </button>
-          <button onClick={onLogout} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--gray-400)' }}
+          <button onClick={onLogout} aria-label="Sair da conta" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--gray-400)' }}
             onMouseEnter={e => e.currentTarget.style.color = 'var(--primary)'}
             onMouseLeave={e => e.currentTarget.style.color = 'var(--gray-400)'}
           >
             <LogOut size={16} />
           </button>
-          <button onClick={onCartClick} style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 6 }}>
+          <button onClick={onCartClick} aria-label="Abrir carrinho" style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: 6 }}>
             <ShoppingCart size={22} color="var(--gray-700)" />
             {cartCount > 0 && (
               <span style={{
@@ -281,7 +281,7 @@ function ProductCard({ produto, restaurante, onAdd }) {
               R$ {Number(produto.preco).toFixed(2)}
             </p>
           </div>
-          <button onClick={() => onAdd(produto, restaurante?.id)} style={{
+          <button aria-label="Adicionar ao carrinho" onClick={() => onAdd(produto, restaurante?.id)} style={{
             width: 44, height: 44, borderRadius: '50%',
             background: 'var(--primary)', border: 'none', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -343,7 +343,7 @@ function FAQItem({ question, answer }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ borderBottom: '1px solid var(--gray-200)' }}>
-      <button onClick={() => setOpen(!open)} style={{
+      <button aria-expanded={open} onClick={() => setOpen(!open)} style={{
         width: '100%', padding: '20px 0', background: 'none', border: 'none', cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left',
       }}>
@@ -410,7 +410,7 @@ function CartSlideOver({ carrinho, calcularTotal, onClose, onCheckout, onAdd, on
               Seu Carrinho
             </span>
           </div>
-          <button onClick={onClose} style={{
+          <button aria-label="Fechar carrinho" onClick={onClose} style={{
             width: 32, height: 32, borderRadius: 8, border: 'none',
             background: 'var(--gray-100)', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -444,7 +444,7 @@ function CartSlideOver({ carrinho, calcularTotal, onClose, onCheckout, onAdd, on
                 </div>
                 {/* Controles de quantidade */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <button onClick={() => onRemove(item.id)} style={{
+                  <button aria-label="Diminuir quantidade" onClick={() => onRemove(item.id)} style={{
                     width: 28, height: 28, borderRadius: 8, border: '1.5px solid #e5e7eb',
                     background: '#fff', cursor: 'pointer', display: 'flex',
                     alignItems: 'center', justifyContent: 'center',
@@ -454,7 +454,7 @@ function CartSlideOver({ carrinho, calcularTotal, onClose, onCheckout, onAdd, on
                   <span style={{ fontSize: 14, fontWeight: 700, color: '#1f2937', minWidth: 20, textAlign: 'center' }}>
                     {item.quantidade}
                   </span>
-                  <button onClick={() => onAdd(item, item.restauranteId)} style={{
+                  <button aria-label="Aumentar quantidade" onClick={() => onAdd(item, item.restauranteId)} style={{
                     width: 28, height: 28, borderRadius: 8, border: 'none',
                     background: 'var(--primary)', cursor: 'pointer', display: 'flex',
                     alignItems: 'center', justifyContent: 'center',
@@ -539,6 +539,39 @@ function Footer() {
 function ClienteApp({ onLogout }) {
   const ctrl = useClienteController();
 
+  // Produtos filtrados envolvidos em useMemo para evitar recálculos desnecessários
+  const todosProdutos = useMemo(() => {
+    return ctrl.produtos
+      .filter(p => p.disponivel !== false)
+      .map(p => ({
+        ...p,
+        restaurante: ctrl.restaurantes.find(r => r.id === p.restaurante_id),
+      }))
+      .filter(p => {
+        // Filtro de Categoria
+        if (ctrl.categoriaAtiva !== 'todos') {
+          const categoriaProduto = (p.categoria || '').toLowerCase().trim();
+          const categoriaRestaurante = (p.restaurante?.categoria || '').toLowerCase().trim();
+          
+          if (categoriaRestaurante !== ctrl.categoriaAtiva && categoriaProduto !== ctrl.categoriaAtiva) {
+            return false;
+          }
+        }
+
+        // Filtro de Busca
+        if (ctrl.busca && !p.nome.toLowerCase().includes(ctrl.busca.toLowerCase())) {
+          return false;
+        }
+        
+        return true;
+      });
+  }, [ctrl.produtos, ctrl.restaurantes, ctrl.categoriaAtiva, ctrl.busca]);
+
+  // Contagem do carrinho calculada com memoização
+  const cartCount = useMemo(() => {
+    return ctrl.carrinho.reduce((a, i) => a + i.quantidade, 0);
+  }, [ctrl.carrinho]);
+
   // Verificações de estado
   if (ctrl.pedidoAtivoId) {
     return <AcompanhamentoPedido pedidoId={ctrl.pedidoAtivoId} onVoltarAoMenu={() => ctrl.setPedidoAtivoId(null)} />;
@@ -555,21 +588,6 @@ function ClienteApp({ onLogout }) {
   if (ctrl.precisaLogar) {
     return <LoginCliente onLoginSucesso={ctrl.loginSucesso} />;
   }
-
-  // Produtos filtrados
-  const todosProdutos = ctrl.produtos
-    .filter(p => p.disponivel !== false)
-    .map(p => ({
-      ...p,
-      restaurante: ctrl.restaurantes.find(r => r.id === p.restaurante_id),
-    }))
-    .filter(p => {
-      if (ctrl.categoriaAtiva !== 'todos' && p.restaurante?.categoria !== ctrl.categoriaAtiva) return false;
-      if (ctrl.busca && !p.nome.toLowerCase().includes(ctrl.busca.toLowerCase())) return false;
-      return true;
-    });
-
-  const cartCount = ctrl.carrinho.reduce((a, i) => a + i.quantidade, 0);
 
   // Handler para confirmação de pedido
   const handlePedidoConfirmado = async (dadosCheckout) => {
