@@ -34,6 +34,16 @@ export const PedidoModel = {
     return data;
   },
 
+  async buscarPorEmail(email) {
+    const { data, error } = await supabase
+      .from('pedidos')
+      .select('*, restaurantes(nome)')
+      .eq('email', email) // Note que o e-mail do Eder está preenchido!
+      .order('criado_em', { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+
   async criar(dados) {
     const { data, error } = await supabase
       .from('pedidos')

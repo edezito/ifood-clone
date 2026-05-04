@@ -1,8 +1,8 @@
 // src/models/statusModel.js
 export const StatusModel = {
   PASSOS: [
-    { key: 'Aguardando',    label: 'Pedido recebido',   hint: 'Aguardando confirmação' },
-    { key: 'Em Preparação', label: 'Preparando',         hint: 'Cozinha em ação' },
+    { key: 'Aguardando',    label: 'Pedido recebido',  hint: 'Aguardando confirmação' },
+    { key: 'Em Preparação', label: 'Preparando',       hint: 'Cozinha em ação' },
     { key: 'Em Trânsito',   label: 'Saiu para entrega',  hint: 'A caminho' },
     { key: 'Entregue',      label: 'Entregue',           hint: 'Bom apetite!' },
   ],
@@ -46,6 +46,7 @@ export const StatusModel = {
     if (!status) return 'Aguardando';
     const mapa = {
       'aguardando':    'Aguardando',
+      'confirmado':    'Aguardando', // 🔥 O SEGREDO ESTÁ AQUI: Agora ele entende que "Confirmado" é o passo inicial!
       'pending':       'Aguardando',
       'em preparação': 'Em Preparação',
       'preparando':    'Em Preparação',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../services/Supabaseclient';
+import { supabase } from '../services/supabaseClient';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -8,6 +8,7 @@ import {
   CheckCircle, Clock, X, PlusCircle, AlertCircle, LogOut, Mail
 } from 'lucide-react';
 import NotificacaoService from '../services/Notificacaoservice';
+import { StatusModel } from '../models/statusModel';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -327,7 +328,6 @@ function AdminDashboard({ onLogout }) {
       'Em Trânsito': 'bg-purple-100 text-purple-800 border-purple-200',
       'Entregue': 'bg-green-100 text-green-800 border-green-200',
       'Cancelado': 'bg-red-100 text-red-800 border-red-200',
-      'pendente': 'bg-amber-100 text-amber-800 border-amber-200', // Adicionado pendente
     };
     return styles[status] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
@@ -393,25 +393,29 @@ function AdminDashboard({ onLogout }) {
 
       <main className="max-w-7xl mx-auto px-4 py-6">
 
-        {/* ABA: PEDIDOS */}
+       {/* ABA: PEDIDOS */}
         {abaAtiva === 'pedidos' && (
           <div className="space-y-4">
             <h2 className="text-xl font-black text-gray-800">Pedidos em andamento</h2>
-            {pedidos.filter(p => p.status !== 'Entregue' && p.status !== 'Cancelado').length === 0 ? (
+            {pedidos.filter(p => StatusModel.normalizar(p.status) !== 'Entregue' && StatusModel.normalizar(p.status) !== 'Cancelado').length === 0 ? (
               <div className="bg-white rounded-2xl border border-gray-100 p-10 flex flex-col items-center justify-center text-gray-400">
                 <Clock size={48} className="mb-4 opacity-50" />
                 <p className="font-medium text-lg">Nenhum pedido ativo no momento.</p>
               </div>
             ) : (
-              pedidos.filter(p => p.status !== 'Entregue' && p.status !== 'Cancelado').map(ped => {
+              pedidos.filter(p => StatusModel.normalizar(p.status) !== 'Entregue' && StatusModel.normalizar(p.status) !== 'Cancelado').map(ped => {
                 const loja = restaurantes.find(r => r.id === ped.restaurante_id);
+                
+                // Normaliza o status do pedido atual para garantir que os botões funcionem
+                const statusNormalizado = StatusModel.normalizar(ped.status);
+
                 return (
                   <div key={ped.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 pb-4 border-b border-gray-50">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-wider border ${getStatusBadge(ped.status)}`}>
-                            {ped.status}
+                          <span className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-wider border ${getStatusBadge(statusNormalizado)}`}>
+                            {statusNormalizado}
                           </span>
                           <span className="text-sm font-bold text-gray-400">#{ped.id.toString().slice(0, 8)}</span>
                         </div>
@@ -440,19 +444,19 @@ function AdminDashboard({ onLogout }) {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {(ped.status === 'Aguardando' || ped.status === 'pendente') && (
+                      {statusNormalizado === 'Aguardando' && (
                         <button onClick={() => handleAtualizarStatus(ped.id, 'Em Preparação')}
                           className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
                           Aceitar e Preparar
                         </button>
                       )}
-                      {ped.status === 'Em Preparação' && (
+                      {statusNormalizado === 'Em Preparação' && (
                         <button onClick={() => handleAtualizarStatus(ped.id, 'Em Trânsito')}
                           className="flex-1 sm:flex-none bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
                           Despachar Pedido
                         </button>
                       )}
-                      {ped.status === 'Em Trânsito' && (
+                      {statusNormalizado === 'Em Trânsito' && (
                         <>
                           <button onClick={() => handleAtualizarStatus(ped.id, 'Entregue')}
                             className="flex-1 sm:flex-none bg-green-500 hover:bg-green-600 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
@@ -462,7 +466,7 @@ function AdminDashboard({ onLogout }) {
                             <button
                               onClick={() => handleEnviarPinManual(ped)}
                               disabled={enviandoPin === ped.id}
-                              className="flex items-center justify-center gap-1.5 bg-white border-2 border-purple-200 text-purple-700 hover:bg-purple-50 font-bold py-2 px-4 rounded-xl active:scale-95 transition-all disabled:opacity-50"
+                              className="flex items-center gap-1.5 bg-white border-2 border-purple-200 text-purple-700 hover:bg-purple-50 font-bold py-2 px-4 rounded-xl active:scale-95 transition-all disabled:opacity-50"
                               title="Reenviar PIN por e-mail"
                             >
                               <Mail size={15} />
@@ -471,7 +475,7 @@ function AdminDashboard({ onLogout }) {
                           )}
                         </>
                       )}
-                      {(ped.status !== 'Entregue' && ped.status !== 'Cancelado') && (
+                      {(statusNormalizado !== 'Entregue' && statusNormalizado !== 'Cancelado') && (
                         <button onClick={() => { if (window.confirm('Cancelar este pedido?')) handleAtualizarStatus(ped.id, 'Cancelado'); }}
                           className="flex-1 sm:flex-none bg-white border-2 border-red-100 text-red-600 hover:bg-red-50 font-bold py-2 px-6 rounded-xl active:scale-95 transition-all">
                           Cancelar
@@ -693,56 +697,69 @@ function AdminDashboard({ onLogout }) {
                       {buscandoCoordenadas ? 'Buscando...' : 'Buscar Mapa'}
                     </button>
                   </div>
-                  
                   {(latitude && longitude) && (
                     <div className="bg-green-50 p-3 rounded-xl text-sm text-green-700">
                       📍 Coordenadas: {latitude}, {longitude}
                     </div>
                   )}
-                  
-                  {/* --- PARTE QUE ESTAVA CORTADA CORRIGIDA AQUI --- */}
                   <div className="mt-2">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Localização no Mapa</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Visualização no mapa:</label>
                     <MapaLocalizacao latitude={latitude} longitude={longitude} endereco={endereco} nome={nomeRest || 'Nova Loja'} />
                   </div>
-                  
-                  <button type="submit" className="w-full bg-gray-900 hover:bg-black text-white font-bold py-3 rounded-xl transition-all active:scale-95 mt-4">
+                  <button type="submit" className={`w-full text-white font-bold py-3 rounded-xl transition-all active:scale-95 ${
+                    editandoRestId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-900 hover:bg-black'
+                  }`}>
                     {editandoRestId ? 'Atualizar Loja' : 'Salvar Loja'}
                   </button>
                 </form>
               </div>
             )}
 
-            {/* Listagem das Lojas na Aba Gerenciar */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-              {restaurantes.map(rest => (
-                <div key={rest.id} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <h3 className="font-black text-lg text-gray-800">{rest.nome}</h3>
-                    <p className="text-sm text-gray-500 mt-1">CNPJ: {rest.cnpj}</p>
-                    <p className="text-sm text-gray-500 mt-1 line-clamp-2">📍 {rest.endereco}</p>
-                  </div>
-                  <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-50">
-                    <button
-                      onClick={() => prepararEdicaoRestaurante(rest)}
-                      className="flex items-center gap-1 px-3 py-2 text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                    >
-                      <Edit2 size={16} /> Editar
-                    </button>
-                    <button
-                      onClick={() => handleExcluirRestaurante(rest.id, rest.nome)}
-                      className="flex items-center gap-1 px-3 py-2 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                    >
-                      <Trash2 size={16} /> Excluir
-                    </button>
-                  </div>
+            <div className="space-y-3">
+              <h2 className="text-lg font-black text-gray-800">Minhas Lojas</h2>
+              {restaurantes.length === 0 ? (
+                <div className="bg-white rounded-2xl p-10 text-center text-gray-400 border border-gray-100">
+                  <Store size={48} className="mx-auto mb-4 opacity-50" />
+                  <p>Nenhuma loja cadastrada.</p>
                 </div>
-              ))}
+              ) : (
+                restaurantes.map(rest => (
+                  <div key={rest.id} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex-1">
+                        <h3 className="font-black text-lg text-gray-800">{rest.nome}</h3>
+                        <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
+                          <MapPin size={14} /> {rest.endereco}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">CNPJ: {rest.cnpj}</p>
+                        {rest.latitude && (
+                          <p className="text-xs text-gray-400 mt-1">📍 {rest.latitude}, {rest.longitude}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => prepararEdicaoRestaurante(rest)}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-bold text-sm transition-colors">
+                          <Edit2 size={16} /> Editar
+                        </button>
+                        <button onClick={() => handleExcluirRestaurante(rest.id, rest.nome)}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-bold text-sm transition-colors">
+                          <Trash2 size={16} /> Excluir
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <MapaLocalizacao latitude={rest.latitude} longitude={rest.longitude} endereco={rest.endereco} nome={rest.nome} />
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-gray-50 flex gap-4 text-xs">
+                      <span className="text-gray-500">📦 {produtos.filter(p => p.restaurante_id === rest.id).length} produtos</span>
+                      <span className="text-gray-500">🛒 {pedidos.filter(p => p.restaurante_id === rest.id && p.status !== 'Entregue').length} pedidos ativos</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-
           </div>
         )}
-
       </main>
     </div>
   );

@@ -572,22 +572,37 @@ function ClienteApp({ onLogout }) {
     return ctrl.carrinho.reduce((a, i) => a + i.quantidade, 0);
   }, [ctrl.carrinho]);
 
-  // Verificações de estado
-  if (ctrl.pedidoAtivoId) {
-    return <AcompanhamentoPedido pedidoId={ctrl.pedidoAtivoId} onVoltarAoMenu={() => ctrl.setPedidoAtivoId(null)} />;
-  }
-  if (ctrl.verHistorico) {
-    return (
-      <HistoricoPedidos
-        telefone={ctrl.usuarioLogado?.telefone ?? ctrl.usuarioLogado?.phone}
-        onVoltar={() => ctrl.setVerHistorico(false)}
-        onVerDetalhes={id => { ctrl.setPedidoAtivoId(id); ctrl.setVerHistorico(false); }}
-      />
-    );
-  }
-  if (ctrl.precisaLogar) {
-    return <LoginCliente onLoginSucesso={ctrl.loginSucesso} />;
-  }
+  // ============================================================
+// Verificações de estado (CORRIGIDO)
+// ============================================================
+
+if (ctrl.pedidoAtivoId) {
+  return (
+    <AcompanhamentoPedido 
+      pedidoId={ctrl.pedidoAtivoId} 
+      onVoltarAoMenu={() => ctrl.setPedidoAtivoId(null)} 
+    />
+  );
+}
+
+if (ctrl.verHistorico) {
+  return (
+    <HistoricoPedidos
+      // 🔥 MUDANÇA AQUI: Passamos o objeto usuarioLogado completo.
+      // Isso permite que o controller busque por EMAIL ou TELEFONE.
+      usuario={ctrl.usuarioLogado} 
+      onVoltar={() => ctrl.setVerHistorico(false)}
+      onVerDetalhes={id => { 
+        ctrl.setPedidoAtivoId(id); 
+        ctrl.setVerHistorico(false); 
+      }}
+    />
+  );
+}
+
+if (ctrl.precisaLogar) {
+  return <LoginCliente onLoginSucesso={ctrl.loginSucesso} />;
+}
 
   // Handler para confirmação de pedido
   const handlePedidoConfirmado = async (dadosCheckout) => {
@@ -681,7 +696,6 @@ function ClienteApp({ onLogout }) {
           />
         )}
 
-        {/* Checkout Modal */}
         {ctrl.checkoutAberto && (
           <CheckoutModal
             carrinho={ctrl.carrinho}
@@ -689,6 +703,12 @@ function ClienteApp({ onLogout }) {
             usuarioLogado={ctrl.usuarioLogado}
             onClose={() => ctrl.setCheckoutAberto(false)}
             onPedidoConfirmado={handlePedidoConfirmado}
+            
+            /* 👇 A MÁGICA ACONTECE AQUI 👇 */
+            onAcompanharPedido={(id) => {
+              ctrl.setCheckoutAberto(false); // 1. Fecha o Checkout
+              ctrl.setPedidoAtivoId(id);     // 2. Abre o acompanhamento do pedido
+            }}
           />
         )}
       </div>

@@ -3,7 +3,7 @@ import {
   X, Truck, Store, CheckCircle, ArrowLeft,
   MapPin, ChevronRight, ExternalLink
 } from 'lucide-react';
-import StepPagamento from './StepPagamento'; // Seu novo StepPagamento limpo
+import StepPagamento from './StepPagamento'; 
 
 /* ─── ESTILOS DO CHECKOUT ─────────────────────────────────── */
 const CHECKOUT_STYLES = `
@@ -159,7 +159,7 @@ function StepProcessandoMP({ initPoint, total, onCancelar }) {
   );
 }
 
-function StepConfirmado({ pedidoId, formaPagamento, tipoEntrega, total, onClose }) {
+function StepConfirmado({ pedidoId, formaPagamento, tipoEntrega, total, onAcompanhar }) {
   return (
     <div style={{ textAlign: 'center', animation: 'slideStep 0.3s ease-out' }}>
       <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(135deg, #50A773, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', boxShadow: '0 8px 24px rgba(80,167,115,0.4)' }}>
@@ -183,7 +183,11 @@ function StepConfirmado({ pedidoId, formaPagamento, tipoEntrega, total, onClose 
           </div>
         ))}
       </div>
-      <button onClick={onClose} style={{ width: '100%', padding: '15px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #EA1D2C, #C8101E)', color: '#fff', fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 15, cursor: 'pointer', boxShadow: '0 6px 20px rgba(234,29,44,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+      {/* CORRIGIDO: Agora usa onClick de forma nativa e repassa o pedidoId */}
+      <button 
+        onClick={() => onAcompanhar(pedidoId)} 
+        style={{ width: '100%', padding: '15px', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg, #EA1D2C, #C8101E)', color: '#fff', fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 15, cursor: 'pointer', boxShadow: '0 6px 20px rgba(234,29,44,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+      >
         Acompanhar Pedido <ChevronRight size={16} />
       </button>
     </div>
@@ -198,6 +202,7 @@ export default function CheckoutModal({
   endereco,
   onClose,
   onPedidoConfirmado,
+  onAcompanharPedido // NOVA PROPRIEDADE AQUI
 }) {
   const [step, setStep] = useState('resumo');
   const [tipoEntrega, setTipoEntrega] = useState('Entrega');
@@ -206,7 +211,7 @@ export default function CheckoutModal({
   const [pedidoId, setPedidoId] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mpData, setMpData] = useState(null); // Guardar os dados do Mercado Pago
+  const [mpData, setMpData] = useState(null);
 
   const subtotal = calcularTotal();
   const taxa = tipoEntrega === 'Entrega' ? 4.99 : 0;
@@ -235,9 +240,8 @@ export default function CheckoutModal({
             initPoint: resultado.initPoint,
             preferenceId: resultado.preferenceId
           });
-          setStep('processando'); // Mostra a tela do Mercado Pago
+          setStep('processando');
         } else {
-          // Cartão ou Dinheiro vai direto pra confirmado
           setStep('confirmado');
         }
       } else {
@@ -293,7 +297,13 @@ export default function CheckoutModal({
           )}
           
           {step === 'confirmado' && (
-            <StepConfirmado pedidoId={pedidoId} formaPagamento={formaPagamento} tipoEntrega={tipoEntrega} total={totalFinal} onClose={handleFechar} />
+            <StepConfirmado 
+              pedidoId={pedidoId} 
+              formaPagamento={formaPagamento} 
+              tipoEntrega={tipoEntrega} 
+              total={totalFinal} 
+              onAcompanhar={onAcompanharPedido} // REPASSA A AÇÃO PARA O PAI
+            />
           )}
 
         </div>
