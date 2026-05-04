@@ -1,4 +1,11 @@
+<<<<<<< HEAD
+// ============================================================
+// SERVICE: NotificacaoService
+// Responsabilidade: envio de notificações e notas fiscais
+// ============================================================
+=======
 // services/NotificacaoService.js
+>>>>>>> 326455e3b9cb28538eddfbe1e29e6ff55ecc0fb8
 import { supabase } from './Supabaseclient';
 
 class NotificacaoService {
