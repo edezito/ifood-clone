@@ -2,7 +2,7 @@
 // MODEL: Cliente
 // Responsabilidade: comunicação com Supabase para clientes
 // ============================================================
-import { supabase } from '../services/Supabaseclient ';
+import { supabase } from '../services/Supabaseclient';
 
 export const ClienteModel = {
   async buscarPorId(userId) {

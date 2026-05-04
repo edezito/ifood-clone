@@ -2,7 +2,7 @@
 // SERVICE: NotificacaoService
 // Responsabilidade: envio de notificações e notas fiscais
 // ============================================================
-import { supabase } from './Supabaseclient ';
+import { supabase } from './Supabaseclient';
 
 export const NotificacaoService = {
   async enviarNotaFiscal(pedidoId, emailCliente) {

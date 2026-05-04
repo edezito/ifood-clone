@@ -2,7 +2,7 @@
 // MODEL: ItensPedido
 // Responsabilidade: comunicação com Supabase para itens do pedido
 // ============================================================
-import { supabase } from '../services/Supabaseclient ';
+import { supabase } from '../services/Supabaseclient';
 
 export const ItensPedidoModel = {
   async buscarPorPedido(pedidoId) {

@@ -2,7 +2,7 @@
 // MODEL: Pedido
 // Responsabilidade: toda comunicação com Supabase para pedidos
 // ============================================================
-import { supabase } from '../services/Supabaseclient ';
+import { supabase } from '../services/Supabaseclient';
 
 export const PedidoModel = {
   async listarTodos() {
