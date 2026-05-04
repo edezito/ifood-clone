@@ -17,8 +17,10 @@ body { font-family:'DM Sans', sans-serif; }
 }
 `;
 
-function HistoricoPedidos({ telefone, onVoltar, onVerDetalhes }) {
-  const { pedidos } = useHistoricoController(telefone);
+// 🔥 MUDANÇA AQUI: Trocamos "telefone" por "usuario"
+function HistoricoPedidos({ usuario, onVoltar, onVerDetalhes }) { 
+  // 🔥 MUDANÇA AQUI: Passamos o "usuario" para o controller
+  const { pedidos } = useHistoricoController(usuario); 
 
   return (
     <>
