@@ -6,7 +6,8 @@ import { useState } from 'react';
 import { AuthModel } from './models/authModel'; 
 import LoginAdmin from './views/Loginadmin';    
 import AdminDashboard from './views/Admindashboard'; 
-import ClienteApp from './views/Clienteapp';    
+import ClienteApp from './views/Clienteapp';
+import { CestaProvider } from './contexts/CestaContext'; 
 
 function App() {
   const [adminLogado, setAdminLogado] = useState(false);
@@ -18,7 +19,11 @@ function App() {
   };
 
   if (modoCliente) {
-    return <ClienteApp onLogout={() => setModoCliente(false)} />;
+    return (
+      <CestaProvider>
+        <ClienteApp onLogout={() => setModoCliente(false)} />
+      </CestaProvider>
+    );
   }
 
   if (adminLogado) {
