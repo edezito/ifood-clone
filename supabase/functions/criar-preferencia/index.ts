@@ -29,7 +29,7 @@ serve(async (req) => {
       items.push({
         title: "Taxa de Entrega",
         quantity: 1,
-        unit_price: 4.99,
+        unit_price: 0.0,
         currency_id: "BRL",
       });
     }
