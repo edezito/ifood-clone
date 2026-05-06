@@ -63,7 +63,7 @@ function ProgressBar({ step }) {
 
 function StepResumo({ carrinho, calcularTotal, endereco, onNext }) {
   const subtotal = calcularTotal();
-  const taxa = 4.99;
+  const taxa = 0.0;
   const total = subtotal + taxa;
 
   return (

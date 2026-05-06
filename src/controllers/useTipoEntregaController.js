@@ -4,9 +4,7 @@
 // calcular frete e preparar o payload para o checkout.
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
-// Importe seus models reais aqui. Exemplo:
-// import { CarrinhoModel } from '../models/carrinhoModel';
-// import { EnderecoModel } from '../models/enderecoModel';
+
 
 export function useTipoEntregaController(carrinhoId) {
   // Estados principais
