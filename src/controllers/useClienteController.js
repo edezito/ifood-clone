@@ -1,5 +1,6 @@
 // ============================================================
-// CONTROLLER: useClienteController (CORRIGIDO)
+// CONTROLLER: useClienteController (ATUALIZADO)
+// Inclui taxaFrete dinâmica via OSRM e tempoEstimado real
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
 import { RestauranteModel } from '../models/restauranteModel';
@@ -10,7 +11,7 @@ import { ClienteModel } from '../models/clienteModel';
 import { AuthModel } from '../models/authModel';
 import { PaymentService } from '../services/paymentservice';
 
-const ENDERECO_PADRAO = 'Rua Augusta, 123 - Consolação';
+const ENDERECO_PADRAO = 'Rua Augusta, 123 - Consolação, São Paulo - SP';
 
 export function useClienteController() {
   // ---- Dados de domínio ----
@@ -38,7 +39,7 @@ export function useClienteController() {
   const [categoriaAtiva, setCategoriaAtiva] = useState('todos');
   const [restauranteExpandido, setRestauranteExpandido] = useState(null);
 
-  // ---- Estados de loading e PIX ----
+  // ---- Loading / PIX ----
   const [loading, setLoading] = useState(false);
   const [pixData, setPixData] = useState(null);
 
@@ -107,23 +108,25 @@ export function useClienteController() {
   // ----------------------------------------------------------
   const adicionarAoCarrinho = (produto, restId) => {
     if (carrinho.length > 0 && carrinho[0].restauranteId !== restId) {
-      if (!window.confirm('Sua sacola já tem itens de outro local. Limpar?')) return;
+      if (!window.confirm('Sua sacola já tem itens de outro local. Limpar e adicionar?')) return;
       setCarrinho([{ ...produto, quantidade: 1, restauranteId: restId }]);
       return;
     }
     setCarrinho((prev) => {
       const existe = prev.find((i) => i.id === produto.id);
       if (existe)
-        return prev.map((i) => (i.id === produto.id ? { ...i, quantidade: i.quantidade + 1 } : i));
+        return prev.map((i) =>
+          i.id === produto.id ? { ...i, quantidade: i.quantidade + 1 } : i
+        );
       return [...prev, { ...produto, quantidade: 1, restauranteId: restId }];
     });
   };
 
   const removerDoCarrinho = (produtoId) => {
-    setCarrinho(prev =>
+    setCarrinho((prev) =>
       prev
-        .map(i => i.id === produtoId ? { ...i, quantidade: i.quantidade - 1 } : i)
-        .filter(i => i.quantidade > 0)
+        .map((i) => (i.id === produtoId ? { ...i, quantidade: i.quantidade - 1 } : i))
+        .filter((i) => i.quantidade > 0)
     );
   };
 
@@ -151,17 +154,21 @@ export function useClienteController() {
   };
 
   // ----------------------------------------------------------
-  // Finalizar pedido (CORRIGIDO - Passa carrinho e tipoEntrega)
+  // Finalizar pedido
+  // Agora recebe taxaFrete calculada pelo OSRM via checkout
   // ----------------------------------------------------------
-  const finalizarPedido = async ({ 
-    tipoEntrega, 
-    formaPagamento, 
-    total, 
+  const finalizarPedido = async ({
+    tipoEntrega,
+    formaPagamento,
+    total,
+    taxaFrete = 0,
+    tempoEstimado = null,
+    rotaInfo = null,
     dadosCartao = null,
     acao = null,
-    pedidoId = null
+    pedidoId = null,
   }) => {
-    // Se for ação de acompanhar, apenas navega
+    // Ação de apenas acompanhar (sem criar pedido)
     if (acao === 'acompanhar') {
       setCheckoutAberto(false);
       setCarrinho([]);
@@ -171,7 +178,7 @@ export function useClienteController() {
     }
 
     const usuario = usuarioLogado;
-    
+
     if (!usuario) {
       setCarrinhoPendente([...carrinho]);
       setPrecisaLogar(true);
@@ -181,74 +188,85 @@ export function useClienteController() {
 
     try {
       setLoading(true);
-      
+
+      // Resolve endereço de entrega
+      const enderecoEntrega =
+        tipoEntrega === 'Retirada'
+          ? 'Retirada no restaurante'
+          : usuario.endereco ?? ENDERECO_PADRAO;
+
+      // Monta tempo estimado para salvar junto ao pedido
+      const tempoTexto = tempoEstimado?.texto ?? (tipoEntrega === 'Entrega' ? '~35 min' : '~15 min');
+
       // 1. Criar o pedido
       const pedido = await PedidoModel.criar({
         restaurante_id: carrinho[0].restauranteId,
         cliente_nome: usuario.nome ?? 'Cliente',
         cliente_id: usuario.id,
         total,
+        taxa_entrega: tipoEntrega === 'Retirada' ? 0 : taxaFrete,
         forma_pagamento: formaPagamento,
         tipo_entrega: tipoEntrega,
         status: 'Aguardando',
         telefone: usuario.telefone ?? usuario.phone,
         pin_entrega: Math.floor(1000 + Math.random() * 9000).toString(),
         email: usuario.email,
-        endereco: tipoEntrega === 'Retirada' 
-          ? 'Retirada no restaurante' 
-          : (usuario.endereco ?? ENDERECO_PADRAO)
+        endereco: enderecoEntrega,
+        // Campos extras de rota (se a coluna existir no banco)
+        distancia_km: rotaInfo?.distanciaKm ?? null,
+        tempo_estimado: tempoTexto,
       });
 
       // 2. Inserir itens do pedido
       await ItensPedidoModel.inserirVarios(
-        carrinho.map(item => ({
+        carrinho.map((item) => ({
           pedido_id: pedido.id,
           produto_id: item.id,
           quantidade: item.quantidade,
-          preco_unitario: item.preco
+          preco_unitario: item.preco,
         }))
       );
 
-      // 3. Processar pagamento - AGORA COM CARRINHO E TIPO ENTREGA!
+      // 3. Processar pagamento
       const resultadoPagamento = await PaymentService.processarPagamento({
         pedidoId: pedido.id,
-        formaPagamento: formaPagamento,
+        formaPagamento,
         valor: total,
-        dadosCartao: dadosCartao,
+        dadosCartao,
         usuarioLogado: usuario,
-        carrinho: carrinho,        // ✅ ADICIONADO
-        tipoEntrega: tipoEntrega   // ✅ ADICIONADO
+        carrinho,
+        tipoEntrega,
       });
 
-      // 4. Atualizar status do pedido baseado no resultado
+      // 4. Atualizar status do pedido
       if (resultadoPagamento.sucesso) {
         await PedidoModel.atualizarStatus(pedido.id, 'Confirmado');
-        
+
         return {
           sucesso: true,
-          pedido: pedido,
+          pedido,
           pagamento: resultadoPagamento.pagamento,
           pixCode: resultadoPagamento.pixCode,
           qrcodeUrl: resultadoPagamento.qrcodeUrl,
           expiracao: resultadoPagamento.expiracao,
-          preferenceId: resultadoPagamento.preferenceId, // ✅ Para Mercado Pago
-          initPoint: resultadoPagamento.initPoint         // ✅ Para Mercado Pago
+          preferenceId: resultadoPagamento.preferenceId,
+          initPoint: resultadoPagamento.initPoint,
+          tempoEstimado,
+          rotaInfo,
         };
       } else {
         await PedidoModel.atualizarStatus(pedido.id, 'Pagamento Recusado');
-        
         return {
           sucesso: false,
           mensagem: resultadoPagamento.mensagem || 'Pagamento recusado. Tente novamente.',
-          pedido: pedido
+          pedido,
         };
       }
-
     } catch (error) {
       console.error('Erro ao finalizar pedido:', error);
       return {
         sucesso: false,
-        mensagem: `Erro ao processar pedido: ${error.message}`
+        mensagem: `Erro ao processar pedido: ${error.message}`,
       };
     } finally {
       setLoading(false);
@@ -265,32 +283,32 @@ export function useClienteController() {
     restaurantes,
     produtos,
     usuarioLogado,
-    pedidoAtivoId, 
+    pedidoAtivoId,
     setPedidoAtivoId,
-    verHistorico, 
+    verHistorico,
     setVerHistorico,
     precisaLogar,
     carrinho,
-    carrinhoAberto, 
+    carrinhoAberto,
     setCarrinhoAberto,
     adicionarAoCarrinho,
     removerDoCarrinho,
     limparCarrinho,
     calcularTotal,
-    checkoutAberto, 
+    checkoutAberto,
     setCheckoutAberto,
     iniciarCheckout,
     finalizarPedido,
-    busca, 
+    busca,
     setBusca,
-    categoriaAtiva, 
+    categoriaAtiva,
     setCategoriaAtiva,
     restauranteExpandido,
     toggleRestaurante,
     loginSucesso,
     logout,
-    loading, 
+    loading,
     pixData,
-    setPixData
+    setPixData,
   };
 }
