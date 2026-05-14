@@ -1,5 +1,4 @@
-// services/NotificacaoService.js
-import { supabase } from './supabaseClient';
+import { supabase } from './Supabaseclient';
 
 class NotificacaoService {
 

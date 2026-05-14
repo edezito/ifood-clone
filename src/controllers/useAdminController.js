@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { RestauranteModel } from '../models/restauranteModel';
 import { ProdutoModel } from '../models/produtoModel';
 import { PedidoModel } from '../models/pedidoModel';
-import { NotificacaoService } from '../services/Notificacaoservice';
+import NotificacaoService from '../services/Notificacaoservice';
 
 export function useAdminController() {
   // ---- Estado de dados ----

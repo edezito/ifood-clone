@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../services/Supabaseclient';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -8,6 +8,7 @@ import {
   CheckCircle, Clock, X, PlusCircle, AlertCircle, LogOut, Mail
 } from 'lucide-react';
 import NotificacaoService from '../services/Notificacaoservice';
+import { StatusModel } from '../models/statusModel';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -392,25 +393,29 @@ function AdminDashboard({ onLogout }) {
 
       <main className="max-w-7xl mx-auto px-4 py-6">
 
-        {/* ABA: PEDIDOS */}
+       {/* ABA: PEDIDOS */}
         {abaAtiva === 'pedidos' && (
           <div className="space-y-4">
             <h2 className="text-xl font-black text-gray-800">Pedidos em andamento</h2>
-            {pedidos.filter(p => p.status !== 'Entregue' && p.status !== 'Cancelado').length === 0 ? (
+            {pedidos.filter(p => StatusModel.normalizar(p.status) !== 'Entregue' && StatusModel.normalizar(p.status) !== 'Cancelado').length === 0 ? (
               <div className="bg-white rounded-2xl border border-gray-100 p-10 flex flex-col items-center justify-center text-gray-400">
                 <Clock size={48} className="mb-4 opacity-50" />
                 <p className="font-medium text-lg">Nenhum pedido ativo no momento.</p>
               </div>
             ) : (
-              pedidos.filter(p => p.status !== 'Entregue' && p.status !== 'Cancelado').map(ped => {
+              pedidos.filter(p => StatusModel.normalizar(p.status) !== 'Entregue' && StatusModel.normalizar(p.status) !== 'Cancelado').map(ped => {
                 const loja = restaurantes.find(r => r.id === ped.restaurante_id);
+                
+                // Normaliza o status do pedido atual para garantir que os botões funcionem
+                const statusNormalizado = StatusModel.normalizar(ped.status);
+
                 return (
                   <div key={ped.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 pb-4 border-b border-gray-50">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-wider border ${getStatusBadge(ped.status)}`}>
-                            {ped.status}
+                          <span className={`px-2.5 py-1 rounded-md text-[10px] uppercase font-black tracking-wider border ${getStatusBadge(statusNormalizado)}`}>
+                            {statusNormalizado}
                           </span>
                           <span className="text-sm font-bold text-gray-400">#{ped.id.toString().slice(0, 8)}</span>
                         </div>
@@ -439,19 +444,19 @@ function AdminDashboard({ onLogout }) {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {ped.status === 'Aguardando' && (
+                      {statusNormalizado === 'Aguardando' && (
                         <button onClick={() => handleAtualizarStatus(ped.id, 'Em Preparação')}
                           className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
                           Aceitar e Preparar
                         </button>
                       )}
-                      {ped.status === 'Em Preparação' && (
+                      {statusNormalizado === 'Em Preparação' && (
                         <button onClick={() => handleAtualizarStatus(ped.id, 'Em Trânsito')}
                           className="flex-1 sm:flex-none bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
                           Despachar Pedido
                         </button>
                       )}
-                      {ped.status === 'Em Trânsito' && (
+                      {statusNormalizado === 'Em Trânsito' && (
                         <>
                           <button onClick={() => handleAtualizarStatus(ped.id, 'Entregue')}
                             className="flex-1 sm:flex-none bg-green-500 hover:bg-green-600 text-white font-bold py-2.5 px-6 rounded-xl active:scale-95 transition-all">
@@ -470,7 +475,7 @@ function AdminDashboard({ onLogout }) {
                           )}
                         </>
                       )}
-                      {(ped.status !== 'Entregue' && ped.status !== 'Cancelado') && (
+                      {(statusNormalizado !== 'Entregue' && statusNormalizado !== 'Cancelado') && (
                         <button onClick={() => { if (window.confirm('Cancelar este pedido?')) handleAtualizarStatus(ped.id, 'Cancelado'); }}
                           className="flex-1 sm:flex-none bg-white border-2 border-red-100 text-red-600 hover:bg-red-50 font-bold py-2 px-6 rounded-xl active:scale-95 transition-all">
                           Cancelar

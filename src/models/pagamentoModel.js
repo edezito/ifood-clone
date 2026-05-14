@@ -1,5 +1,5 @@
 // models/pagamentoModel.js
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../services/Supabaseclient';
 
 export const PagamentoModel = {
   async criar(dados) {

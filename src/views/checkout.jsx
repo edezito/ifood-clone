@@ -1,15 +1,10 @@
-// ============================================================
-// COMPONENT: CheckoutModal
-// Responsabilidade: Modal de checkout com seleção de entrega,
-// forma de pagamento e processamento
-// ============================================================
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  X, Truck, Store, CreditCard, QrCode,
-  ChevronRight, CheckCircle, ArrowLeft, Copy, Clock,
-  MapPin, Shield, Zap, RefreshCw, ShoppingCart, Plus, Minus
+  X, Truck, Store, CheckCircle, ArrowLeft,
+  MapPin, ChevronRight, ExternalLink, Clock, Navigation
 } from 'lucide-react';
 import StepPagamento from './StepPagamento';
+import SelecaoEntregaPedido from './SelecaoEntregaPedido';
 
 /* ─── ESTILOS DO CHECKOUT ─────────────────────────────────── */
 const CHECKOUT_STYLES = `
@@ -21,43 +16,28 @@ const CHECKOUT_STYLES = `
   from { opacity: 0; transform: translateX(20px); }
   to   { opacity: 1; transform: translateX(0); }
 }
-@keyframes pixPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 195, 0, 0.4); }
-  50%       { box-shadow: 0 0 0 12px rgba(0, 195, 0, 0); }
-}
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-@keyframes countDown {
-  from { width: 100%; }
-  to   { width: 0%; }
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 `;
 
-/* ─── CONSTANTES ─────────────────────────────────────────── */
 const STEPS = ['resumo', 'entrega', 'pagamento', 'processando', 'confirmado'];
 
-/* ─── HELPERS ─────────────────────────────────────────────── */
 function formatCurrency(val) {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
-    currency: 'BRL'
+    currency: 'BRL',
   }).format(val || 0);
 }
 
-/* ─── COMPONENTES DOS STEPS ──────────────────────────────── */
-
-// Barra de Progresso
+/* ─── PROGRESS BAR ───────────────────────────────────────── */
 function ProgressBar({ step }) {
   const steps = ['Resumo', 'Entrega', 'Pagamento'];
   const idx = Math.min(STEPS.indexOf(step), 2);
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      gap: 8, marginBottom: 28,
-    }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 28 }}>
       {steps.map((label, i) => (
         <React.Fragment key={label}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
@@ -72,7 +52,8 @@ function ProgressBar({ step }) {
               {i < idx ? <CheckCircle size={14} /> : i + 1}
             </div>
             <span style={{
-              fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em',
+              fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+              letterSpacing: '0.04em',
               color: i <= idx ? '#EA1D2C' : '#9ca3af',
             }}>
               {label}
@@ -91,25 +72,23 @@ function ProgressBar({ step }) {
   );
 }
 
-// Step: Resumo do Pedido
-function StepResumo({ carrinho, calcularTotal, endereco, onNext }) {
+/* ─── STEP RESUMO ─────────────────────────────────────────── */
+function StepResumo({ carrinho, calcularTotal, onNext }) {
   const subtotal = calcularTotal();
-  const taxa = 4.99;
-  const total = subtotal + taxa;
 
   return (
     <div style={{ animation: 'slideStep 0.3s ease-out' }}>
       <h3 style={{
-        fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18,
-        color: '#1f2937', marginBottom: 20,
+        fontFamily: "'Syne', sans-serif", fontWeight: 800,
+        fontSize: 18, color: '#1f2937', marginBottom: 20,
       }}>
         Resumo do Pedido
       </h3>
 
-      {/* Itens */}
       <div style={{
-        background: '#f9fafb', borderRadius: 14, padding: '4px 16px',
-        marginBottom: 20, border: '1px solid #e5e7eb',
+        background: '#f9fafb', borderRadius: 14,
+        padding: '4px 16px', marginBottom: 20,
+        border: '1px solid #e5e7eb',
       }}>
         {carrinho.map((item, i) => (
           <div key={item.id} style={{
@@ -120,11 +99,15 @@ function StepResumo({ carrinho, calcularTotal, endereco, onNext }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{
                 background: '#EA1D2C', color: '#fff',
-                width: 22, height: 22, borderRadius: 6, display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
+                width: 22, height: 22, borderRadius: 6,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 11, fontWeight: 800, flexShrink: 0,
-              }}>{item.quantidade}</span>
-              <span style={{ fontSize: 14, color: '#374151', fontWeight: 500 }}>{item.nome}</span>
+              }}>
+                {item.quantidade}
+              </span>
+              <span style={{ fontSize: 14, color: '#374151', fontWeight: 500 }}>
+                {item.nome}
+              </span>
             </div>
             <span style={{ fontSize: 14, fontWeight: 700, color: '#1f2937', flexShrink: 0 }}>
               {formatCurrency(item.preco * item.quantidade)}
@@ -139,272 +122,130 @@ function StepResumo({ carrinho, calcularTotal, endereco, onNext }) {
           <span>Subtotal</span>
           <span>{formatCurrency(subtotal)}</span>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#6b7280' }}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between',
+          fontSize: 12, color: '#9ca3af', fontStyle: 'italic',
+        }}>
           <span>Taxa de entrega</span>
-          <span>{formatCurrency(taxa)}</span>
+          <span>calculada no próximo passo</span>
         </div>
         <div style={{
           display: 'flex', justifyContent: 'space-between',
-          fontSize: 18, fontWeight: 900, color: '#1f2937',
+          fontSize: 17, fontWeight: 900, color: '#1f2937',
           fontFamily: "'Syne', sans-serif",
           paddingTop: 8, borderTop: '2px solid #e5e7eb', marginTop: 4,
         }}>
-          <span>Total</span>
-          <span style={{ color: '#EA1D2C' }}>{formatCurrency(total)}</span>
+          <span>Subtotal</span>
+          <span style={{ color: '#EA1D2C' }}>{formatCurrency(subtotal)}</span>
         </div>
       </div>
 
-      {/* Endereço */}
-      {endereco && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          background: '#FFF0F0', borderRadius: 12, padding: '12px 16px',
-          marginBottom: 24, border: '1px solid #fecaca',
-        }}>
-          <MapPin size={16} color="#EA1D2C" flexShrink={0} />
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 700, color: '#EA1D2C', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Endereço de entrega
-            </p>
-            <p style={{ fontSize: 13, color: '#374151', marginTop: 2 }}>{endereco}</p>
-          </div>
-        </div>
-      )}
-
-      <button onClick={() => onNext(total)} style={{
-        width: '100%', padding: '15px', borderRadius: 14, border: 'none',
-        background: 'linear-gradient(135deg, #EA1D2C, #C8101E)',
-        color: '#fff', fontFamily: "'Syne', sans-serif", fontWeight: 800,
-        fontSize: 15, cursor: 'pointer',
-        boxShadow: '0 6px 20px rgba(234,29,44,0.35)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-      }}>
+      <button
+        onClick={onNext}
+        style={{
+          width: '100%', padding: '15px', borderRadius: 14, border: 'none',
+          background: 'linear-gradient(135deg, #EA1D2C, #C8101E)', color: '#fff',
+          fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 15,
+          cursor: 'pointer',
+          boxShadow: '0 6px 20px rgba(234,29,44,0.35)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}
+      >
         Continuar <ChevronRight size={16} />
       </button>
     </div>
   );
 }
 
-// Step: Tipo de Entrega
-function StepEntrega({ tipoEntrega, setTipoEntrega, onNext, onBack }) {
-  const options = [
-    {
-      key: 'Entrega',
-      icon: Truck,
-      label: 'Receber em casa',
-      desc: 'Entrega no seu endereço — ~35 min',
-      color: '#EA1D2C',
-      bg: '#FFF0F0',
-    },
-    {
-      key: 'Retirada',
-      icon: Store,
-      label: 'Retirar no restaurante',
-      desc: 'Retire pessoalmente — ~15 min',
-      color: '#50A773',
-      bg: '#E8F5EE',
-    },
-  ];
-
+/* ─── STEP ENTREGA (wrapper fullscreen para SelecaoEntregaPedido) ── */
+function StepEntregaFullscreen({
+  carrinho,
+  usuarioLogado,
+  restauranteId,
+  calcularTotal,
+  onConfirmar,
+  onVoltar,
+}) {
   return (
-    <div style={{ animation: 'slideStep 0.3s ease-out' }}>
-      <button onClick={onBack} style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        background: '#f3f4f6', border: 'none', borderRadius: 10,
-        padding: '7px 14px', cursor: 'pointer',
-        color: '#6b7280', fontSize: 13, fontWeight: 600,
-        fontFamily: "'DM Sans', sans-serif",
-      }}>
-        <ArrowLeft size={14} /> Voltar
-      </button>
-
-      <h3 style={{
-        fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18,
-        color: '#1f2937', margin: '16px 0 8px',
-      }}>
-        Como quer receber?
-      </h3>
-      <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 24 }}>
-        Escolha a modalidade de entrega
-      </p>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
-        {options.map(({ key, icon: Icon, label, desc, color, bg }) => (
-          <button
-            key={key}
-            onClick={() => setTipoEntrega(key)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 16,
-              padding: '18px 20px', borderRadius: 16, cursor: 'pointer',
-              border: `2px solid ${tipoEntrega === key ? color : '#e5e7eb'}`,
-              background: tipoEntrega === key ? bg : '#fff',
-              transition: 'all 0.2s', textAlign: 'left', width: '100%',
-            }}
-          >
-            <div style={{
-              width: 48, height: 48, borderRadius: 14, flexShrink: 0,
-              background: tipoEntrega === key ? color : '#f3f4f6',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Icon size={22} color={tipoEntrega === key ? '#fff' : '#9ca3af'} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <p style={{
-                fontSize: 15, fontWeight: 700,
-                color: tipoEntrega === key ? color : '#1f2937',
-              }}>{label}</p>
-              <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{desc}</p>
-            </div>
-            {tipoEntrega === key && (
-              <CheckCircle size={20} color={color} style={{ flexShrink: 0 }} />
-            )}
-          </button>
-        ))}
-      </div>
-
-      <button onClick={onNext} disabled={!tipoEntrega} style={{
-        width: '100%', padding: '15px', borderRadius: 14, border: 'none',
-        background: 'linear-gradient(135deg, #EA1D2C, #C8101E)',
-        color: '#fff', fontFamily: "'Syne', sans-serif", fontWeight: 800,
-        fontSize: 15, cursor: tipoEntrega ? 'pointer' : 'not-allowed',
-        boxShadow: '0 6px 20px rgba(234,29,44,0.35)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        opacity: tipoEntrega ? 1 : 0.5,
-      }}>
-        Continuar <ChevronRight size={16} />
-      </button>
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 80,
+      background: 'white',
+      animation: 'slideStep 0.25s ease-out',
+      overflowY: 'auto',
+    }}>
+      <SelecaoEntregaPedido
+        carrinhoItems={carrinho}
+        usuarioLogado={usuarioLogado}
+        restauranteId={restauranteId}
+        onVoltar={onVoltar}
+        onAvancarPagamento={onConfirmar}
+      />
     </div>
   );
 }
 
-// Step: Processando PIX
-function StepProcessandoPIX({ pixCode, qrcodeUrl, expiracao, total, onPixConfirmado, onCancelar }) {
-  const [pixCopied, setPixCopied] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(expiracao || 300);
-  
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return t - 1;
-      });
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, []);
-
-  const formatTime = (s) => {
-    const min = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  };
-
-  const handleCopyPix = () => {
-    navigator.clipboard.writeText(pixCode).catch(() => {
-      const ta = document.createElement('textarea');
-      ta.value = pixCode;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-    });
-    setPixCopied(true);
-    setTimeout(() => setPixCopied(false), 3000);
-  };
-
+/* ─── STEP PROCESSANDO MERCADO PAGO ──────────────────────── */
+function StepProcessandoMP({ initPoint, total, onCancelar }) {
   return (
     <div style={{ textAlign: 'center', padding: '20px 0', animation: 'slideStep 0.3s ease-out' }}>
       <div style={{
         display: 'inline-flex', alignItems: 'center', gap: 8,
-        background: '#E8F5EE', border: '1px solid #a7f3d0',
+        background: '#E3F2FD', border: '1px solid #90CAF9',
         borderRadius: 99, padding: '6px 16px', marginBottom: 20,
-        fontSize: 12, fontWeight: 700, color: '#065f46',
+        fontSize: 12, fontWeight: 700, color: '#1565C0',
       }}>
-        <div style={{
-          width: 8, height: 8, borderRadius: '50%', 
-          background: '#10b981',
-          animation: 'pixPulse 2s infinite',
-        }} />
-        Aguardando pagamento PIX
+        💳 Pagamento via Mercado Pago
       </div>
 
       <h3 style={{
-        fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: 20,
-        color: '#1f2937', marginBottom: 16,
+        fontFamily: "'Syne', sans-serif", fontWeight: 900,
+        fontSize: 20, color: '#1f2937', marginBottom: 16,
       }}>
-        Escaneie o QR Code
+        Finalizar Pagamento
       </h3>
 
-      {/* Timer */}
-      <div style={{
-        color: timeLeft < 60 ? '#ef4444' : '#6b7280',
-        fontWeight: 600, marginBottom: 8,
-      }}>
-        <Clock size={14} style={{ marginRight: 4, display: 'inline' }} />
-        Expira em {formatTime(timeLeft)}
-      </div>
+      <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 24, lineHeight: 1.6 }}>
+        Você será redirecionado para o Mercado Pago.<br />
+        Lá você pode pagar com <strong>PIX, Cartão ou Boleto</strong>.
+      </p>
 
-      {/* QR Code */}
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
-        <img 
-          src={qrcodeUrl} 
-          alt="QR Code PIX" 
-          style={{ 
-            width: 200, 
-            height: 200, 
-            borderRadius: 12, 
-            border: '2px solid #e5e7eb'
-          }}
-        />
-      </div>
+      <a
+        href={initPoint}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 10,
+          padding: '16px 32px',
+          background: 'linear-gradient(135deg, #009EE3, #007BB5)',
+          color: '#fff', borderRadius: 14, textDecoration: 'none',
+          fontWeight: 800, fontSize: 16, fontFamily: "'DM Sans', sans-serif",
+          boxShadow: '0 6px 20px rgba(0,158,227,0.35)', marginBottom: 16,
+        }}
+      >
+        <ExternalLink size={18} /> Pagar {formatCurrency(total)}
+      </a>
 
-      {/* Código PIX */}
-      <div style={{
-        background: '#f9fafb', borderRadius: 12, padding: '12px 14px',
-        border: '1px solid #e5e7eb', marginBottom: 16, textAlign: 'left',
-      }}>
-        <p style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', marginBottom: 6 }}>
-          PIX Copia e Cola
-        </p>
-        <p style={{
-          fontSize: 10, color: '#374151', wordBreak: 'break-all',
-          fontFamily: 'monospace', lineHeight: 1.5,
-          maxHeight: 60, overflow: 'hidden',
-        }}>
-          {pixCode}
-        </p>
-      </div>
+      <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 20 }}>
+        Após o pagamento, você será redirecionado de volta
+      </p>
 
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={handleCopyPix} style={{
-          flex: 1, padding: '12px', borderRadius: 12,
-          border: '2px solid #e5e7eb', background: pixCopied ? '#E8F5EE' : '#fff',
-          color: pixCopied ? '#065f46' : '#374151',
-          fontWeight: 700, fontSize: 13, cursor: 'pointer',
+      <button
+        onClick={onCancelar}
+        style={{
+          width: '100%', padding: '12px', borderRadius: 12,
+          background: '#f3f4f6', border: 'none', color: '#6b7280',
+          fontWeight: 600, fontSize: 13, cursor: 'pointer',
           fontFamily: "'DM Sans', sans-serif",
-        }}>
-          {pixCopied ? <CheckCircle size={15} style={{ marginRight: 4 }} /> : <Copy size={15} style={{ marginRight: 4 }} />}
-          {pixCopied ? 'Copiado!' : 'Copiar código'}
-        </button>
-        <button onClick={onPixConfirmado} style={{
-          flex: 1, padding: '12px', borderRadius: 12,
-          background: '#50A773', color: '#fff',
-          fontWeight: 700, fontSize: 13, cursor: 'pointer',
-          border: 'none', fontFamily: "'DM Sans', sans-serif",
-        }}>
-          <CheckCircle size={15} style={{ marginRight: 4 }} />
-          Já paguei!
-        </button>
-      </div>
+        }}
+      >
+        Cancelar e voltar
+      </button>
     </div>
   );
 }
 
-// Step: Confirmado
-function StepConfirmado({ pedidoId, formaPagamento, tipoEntrega, total, onClose }) {
+/* ─── STEP CONFIRMADO ─────────────────────────────────────── */
+function StepConfirmado({ pedidoId, formaPagamento, tipoEntrega, total, tempoEstimado, rotaInfo, onAcompanhar }) {
   return (
     <div style={{ textAlign: 'center', animation: 'slideStep 0.3s ease-out' }}>
       <div style={{
@@ -418,28 +259,30 @@ function StepConfirmado({ pedidoId, formaPagamento, tipoEntrega, total, onClose 
       </div>
 
       <h3 style={{
-        fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: 24,
-        color: '#1f2937', marginBottom: 8,
+        fontFamily: "'Syne', sans-serif", fontWeight: 900,
+        fontSize: 24, color: '#1f2937', marginBottom: 8,
       }}>
         Pedido Confirmado! 🎉
       </h3>
-      <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 28 }}>
+
+      <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 24 }}>
         {tipoEntrega === 'Entrega'
           ? 'Estamos preparando seu pedido para entrega'
           : 'Prepare-se para ir buscar seu pedido'}
       </p>
 
+      {/* Card de detalhes */}
       <div style={{
-        background: '#f9fafb', borderRadius: 16, padding: '16px 20px',
-        border: '1px solid #e5e7eb', marginBottom: 24, textAlign: 'left',
+        background: '#f9fafb', borderRadius: 16,
+        padding: '16px 20px', border: '1px solid #e5e7eb',
+        marginBottom: 20, textAlign: 'left',
         display: 'flex', flexDirection: 'column', gap: 10,
       }}>
         {[
-          { label: 'Pedido', value: `#${pedidoId?.toString().slice(0,8).toUpperCase() || 'FE001234'}` },
+          { label: 'Pedido', value: `#${pedidoId?.toString().slice(0, 8).toUpperCase() || 'FE001234'}` },
           { label: 'Pagamento', value: formaPagamento },
           { label: 'Modalidade', value: tipoEntrega === 'Entrega' ? '🛵 Delivery' : '🏪 Retirada' },
           { label: 'Total', value: formatCurrency(total) },
-          { label: 'Tempo estimado', value: tipoEntrega === 'Entrega' ? '~35 minutos' : '~15 minutos' },
         ].map(({ label, value }) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 13, color: '#9ca3af', fontWeight: 500 }}>{label}</span>
@@ -448,14 +291,47 @@ function StepConfirmado({ pedidoId, formaPagamento, tipoEntrega, total, onClose 
         ))}
       </div>
 
-      <button onClick={onClose} style={{
-        width: '100%', padding: '15px', borderRadius: 14, border: 'none',
-        background: 'linear-gradient(135deg, #EA1D2C, #C8101E)',
-        color: '#fff', fontFamily: "'Syne', sans-serif", fontWeight: 800,
-        fontSize: 15, cursor: 'pointer',
-        boxShadow: '0 6px 20px rgba(234,29,44,0.35)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+      {/* Card de tempo — destaque */}
+      <div style={{
+        background: 'linear-gradient(135deg, #FFF0F0, #fff5f5)',
+        borderRadius: 16, border: '1px solid #fecaca',
+        padding: '14px 18px', marginBottom: 20,
+        display: 'flex', alignItems: 'center', gap: 14,
+        animation: 'fadeInUp 0.4s ease-out 0.15s both',
       }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 12,
+          background: '#EA1D2C', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}>
+          <Clock size={22} color="#fff" />
+        </div>
+        <div style={{ textAlign: 'left' }}>
+          <p style={{ fontSize: 11, color: '#EA1D2C', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
+            Tempo estimado de entrega
+          </p>
+          <p style={{ fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: 22, color: '#1f2937', margin: '2px 0 0' }}>
+            {tempoEstimado?.texto || (tipoEntrega === 'Entrega' ? '~35 minutos' : '~15 minutos')}
+          </p>
+          {rotaInfo && tipoEntrega === 'Entrega' && (
+            <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Navigation size={10} />
+              {rotaInfo.distanciaKm} km · via OpenStreetMap
+            </p>
+          )}
+        </div>
+      </div>
+
+      <button
+        onClick={() => onAcompanhar(pedidoId)}
+        style={{
+          width: '100%', padding: '15px', borderRadius: 14, border: 'none',
+          background: 'linear-gradient(135deg, #EA1D2C, #C8101E)', color: '#fff',
+          fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 15,
+          cursor: 'pointer', boxShadow: '0 6px 20px rgba(234,29,44,0.35)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}
+      >
         Acompanhar Pedido <ChevronRight size={16} />
       </button>
     </div>
@@ -467,123 +343,111 @@ export default function CheckoutModal({
   carrinho,
   calcularTotal,
   usuarioLogado,
+  endereco,
   onClose,
   onPedidoConfirmado,
+  onAcompanharPedido,
 }) {
   const [step, setStep] = useState('resumo');
   const [tipoEntrega, setTipoEntrega] = useState('Entrega');
   const [formaPagamento, setFormaPagamento] = useState('');
-  const [total, setTotal] = useState(0);
   const [totalFinal, setTotalFinal] = useState(0);
-  const [cardData, setCardData] = useState(null);
+  const [taxaFrete, setTaxaFrete] = useState(0);
+  const [tempoEstimado, setTempoEstimado] = useState(null);
+  const [rotaInfo, setRotaInfo] = useState(null);
   const [pedidoId, setPedidoId] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  // Estados para controle
-  const [resultadoPedido, setResultadoPedido] = useState(null);
-  const [pixData, setPixData] = useState(null);
+  const [mpData, setMpData] = useState(null);
+
+  // Restaurante do primeiro item do carrinho
+  const restauranteId = carrinho?.[0]?.restauranteId ?? null;
 
   const subtotal = calcularTotal();
-  const taxa = tipoEntrega === 'Entrega' ? 4.99 : 0;
-  const desconto = formaPagamento === 'PIX' ? (subtotal + taxa) * 0.05 : 0;
-  const totalComTaxa = subtotal + taxa;
 
-  const handleResumoNext = (tot) => {
-    setTotal(tot);
-    setStep('entrega');
+  // ── Handlers de navegação ──────────────────────────────
+  const handleResumoNext = () => setStep('entrega');
+
+  // Chamado pelo SelecaoEntregaPedido ao confirmar entrega
+  const handleEntregaConfirmada = ({ tipoEntrega: tipo, taxaFrete: taxa, tempoEstimado: tempo, rotaInfo: rota }) => {
+    setTipoEntrega(tipo === 'retirada' ? 'Retirada' : 'Entrega');
+    setTaxaFrete(taxa ?? 0);
+    setTempoEstimado(tempo ?? null);
+    setRotaInfo(rota ?? null);
+    setStep('pagamento');
   };
 
-  const handleEntregaNext = () => setStep('pagamento');
+  const totalComTaxa = subtotal + (tipoEntrega === 'Retirada' ? 0 : taxaFrete);
 
-  const handlePagamentoNext = async (cd) => {
-    setCardData(cd);
-    const desc = formaPagamento === 'PIX' ? totalComTaxa * 0.05 : 0;
-    const tf = totalComTaxa - desc;
-    setTotalFinal(tf);
-    
-    // Iniciar processamento
-    setStep('processando');
+  const handlePagamentoNext = async () => {
+    setTotalFinal(totalComTaxa);
     setLoading(true);
     setErrorMsg('');
 
     try {
-      // Chamar a função de finalizar pedido do controller
       const resultado = await onPedidoConfirmado({
         tipoEntrega,
         formaPagamento,
-        total: tf,
-        dadosCartao: cd
+        total: totalComTaxa,
+        taxaFrete,
+        tempoEstimado,
+        rotaInfo,
       });
 
-      setResultadoPedido(resultado);
-
       if (resultado.sucesso) {
-        setPedidoId(resultado.pedido.id);
-        
-        if (formaPagamento === 'PIX') {
-          // Para PIX, mostrar a tela de processamento com QR Code
-          setPixData({
-            paymentId: resultado.pagamento.id,
-            pixCode: resultado.pixCode,
-            qrcodeUrl: resultado.qrcodeUrl,
-            expiracao: resultado.expiracao
-          });
-          // Mantém na tela de processamento
+        setPedidoId(resultado.pagamento?.pedido_id || resultado.pedido?.id || 'FE001');
+
+        if (formaPagamento === 'Mercado Pago') {
+          setMpData({ initPoint: resultado.initPoint, preferenceId: resultado.preferenceId });
+          setStep('processando');
         } else {
-          // Para Cartão e Dinheiro, avançar direto para confirmação
           setStep('confirmado');
         }
       } else {
-        setErrorMsg(resultado.mensagem);
-        setStep('pagamento'); // Voltar para tentar novamente
+        setErrorMsg(resultado.mensagem || 'Pagamento não processado. Tente novamente.');
       }
     } catch (error) {
       console.error('Erro ao processar pagamento:', error);
       setErrorMsg('Erro ao processar pagamento. Tente novamente.');
-      setStep('pagamento');
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePixConfirmado = () => {
-    setStep('confirmado');
-  };
+  const handleFechar = () => onClose();
 
-  const handleFecharEAcompanhar = () => {
-    // Limpar carrinho e fechar checkout
-    if (onPedidoConfirmado) {
-      onPedidoConfirmado({
-        tipoEntrega,
-        formaPagamento,
-        total: totalFinal,
-        acao: 'acompanhar',
-        pedidoId: pedidoId
-      });
-    }
-    onClose();
-  };
-
-  const handleFechar = () => {
-    // Apenas fechar sem limpar (caso de erro)
-    onClose();
-  };
+  // Etapa de entrega ocupa a tela toda (fora do modal)
+  if (step === 'entrega') {
+    return (
+      <>
+        <style>{CHECKOUT_STYLES}</style>
+        <StepEntregaFullscreen
+          carrinho={carrinho}
+          usuarioLogado={usuarioLogado}
+          restauranteId={restauranteId}
+          calcularTotal={calcularTotal}
+          onConfirmar={handleEntregaConfirmada}
+          onVoltar={() => setStep('resumo')}
+        />
+      </>
+    );
+  }
 
   return (
     <>
       <style>{CHECKOUT_STYLES}</style>
 
+      {/* Backdrop */}
       <div
         onClick={step !== 'processando' ? handleFechar : undefined}
         style={{
           position: 'fixed', inset: 0, zIndex: 70,
-          background: 'rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(4px)',
+          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '16px',
+          padding: 16,
         }}
       >
+        {/* Modal */}
         <div
           onClick={e => e.stopPropagation()}
           style={{
@@ -596,47 +460,34 @@ export default function CheckoutModal({
             position: 'relative',
           }}
         >
-          {/* Close button - só mostra se não estiver processando */}
-          {step !== 'processando' && (
-            <button onClick={handleFechar} style={{
-              position: 'absolute', top: 16, right: 16,
-              width: 32, height: 32, borderRadius: 8, border: 'none',
-              background: '#f3f4f6', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
+          {/* Botão fechar */}
+          {step !== 'processando' && step !== 'confirmado' && (
+            <button
+              onClick={handleFechar}
+              style={{
+                position: 'absolute', top: 16, right: 16,
+                width: 32, height: 32, borderRadius: 8, border: 'none',
+                background: '#f3f4f6', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
               <X size={15} color="#6b7280" />
             </button>
           )}
 
-          {/* Header */}
-          <div style={{ marginBottom: 24 }}>
-            <p style={{
-              fontFamily: "'Syne', sans-serif", fontWeight: 900, fontSize: 20,
-              color: '#1f2937',
-            }}>
-              {step === 'confirmado' ? '✅ Pedido Confirmado' : '🛒 Finalizar Pedido'}
-            </p>
-          </div>
-
-          {/* Progress */}
-          {['resumo', 'entrega', 'pagamento'].includes(step) && (
+          {/* Progress bar (nos steps modais) */}
+          {['resumo', 'pagamento'].includes(step) && (
             <ProgressBar step={step} />
           )}
 
-          {/* Error */}
+          {/* Mensagem de erro */}
           {errorMsg && (
             <div style={{
-              background: '#fef2f2', border: '1px solid #fecaca',
-              borderRadius: 12, padding: '12px 16px',
-              fontSize: 13, color: '#991b1b', fontWeight: 600,
-              marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center',
+              background: '#FEF2F2', border: '1px solid #FCA5A5',
+              color: '#B91C1C', padding: 12, borderRadius: 12,
+              marginBottom: 20, fontSize: 13, fontWeight: 600, textAlign: 'center',
             }}>
-              ⚠️ {errorMsg}
-              <button onClick={() => setErrorMsg('')} style={{ 
-                background: 'none', border: 'none', cursor: 'pointer', marginLeft: 'auto' 
-              }}>
-                <X size={14} color="#991b1b" />
-              </button>
+              {errorMsg}
             </div>
           )}
 
@@ -645,54 +496,72 @@ export default function CheckoutModal({
             <StepResumo
               carrinho={carrinho}
               calcularTotal={calcularTotal}
-              endereco={usuarioLogado?.endereco}
+              endereco={usuarioLogado?.endereco || endereco}
               onNext={handleResumoNext}
             />
           )}
 
-          {step === 'entrega' && (
-            <StepEntrega
-              tipoEntrega={tipoEntrega}
-              setTipoEntrega={setTipoEntrega}
-              onNext={handleEntregaNext}
-              onBack={() => setStep('resumo')}
-            />
-          )}
-
           {step === 'pagamento' && (
-            <StepPagamento
-              formaPagamento={formaPagamento}
-              setFormaPagamento={setFormaPagamento}
-              onNext={handlePagamentoNext}
-              onBack={() => setStep('entrega')}
-              total={totalComTaxa}
-              loading={loading}
-            />
-          )}
-
-          {step === 'processando' && formaPagamento === 'PIX' && pixData && (
-            <StepProcessandoPIX
-              pixCode={pixData.pixCode}
-              qrcodeUrl={pixData.qrcodeUrl}
-              expiracao={pixData.expiracao}
-              total={totalFinal}
-              onPixConfirmado={handlePixConfirmado}
-              onCancelar={handleFechar}
-            />
-          )}
-
-          {step === 'processando' && formaPagamento !== 'PIX' && loading && (
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <>
+              {/* Resumo da entrega escolhida */}
               <div style={{
-                width: 60, height: 60, borderRadius: '50%',
-                border: '4px solid #e5e7eb', borderTopColor: '#EA1D2C',
-                margin: '0 auto 20px',
-                animation: 'spin 0.8s linear infinite',
-              }} />
-              <p style={{ fontSize: 16, fontWeight: 600, color: '#374151' }}>
-                {formaPagamento === 'Cartão' ? 'Processando pagamento...' : 'Confirmando pedido...'}
-              </p>
-            </div>
+                background: '#f9fafb', borderRadius: 12,
+                padding: '10px 14px', marginBottom: 20,
+                border: '1px solid #e5e7eb',
+                display: 'flex', alignItems: 'center', gap: 10,
+                animation: 'fadeInUp 0.3s ease-out',
+              }}>
+                {tipoEntrega === 'Entrega'
+                  ? <Truck size={16} color="#EA1D2C" style={{ flexShrink: 0 }} />
+                  : <Store size={16} color="#50A773" style={{ flexShrink: 0 }} />
+                }
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#374151', margin: 0 }}>
+                    {tipoEntrega === 'Entrega' ? '🛵 Entrega' : '🏪 Retirada no local'}
+                  </p>
+                  <p style={{ fontSize: 12, color: '#9ca3af', margin: '1px 0 0', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Clock size={10} />
+                    {tempoEstimado?.texto || (tipoEntrega === 'Entrega' ? '~35 min' : '~15 min')}
+                    {tipoEntrega === 'Entrega' && taxaFrete > 0 && (
+                      <span style={{ marginLeft: 6, color: '#EA1D2C', fontWeight: 600 }}>
+                        · +R$ {taxaFrete.toFixed(2).replace('.', ',')} frete
+                      </span>
+                    )}
+                    {tipoEntrega === 'Retirada' && (
+                      <span style={{ marginLeft: 6, color: '#50A773', fontWeight: 600 }}>· Frete grátis</span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setStep('entrega')}
+                  style={{
+                    fontSize: 11, color: '#EA1D2C', fontWeight: 700,
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    padding: '4px 8px', borderRadius: 6,
+                    textDecoration: 'underline', flexShrink: 0,
+                  }}
+                >
+                  alterar
+                </button>
+              </div>
+
+              <StepPagamento
+                formaPagamento={formaPagamento}
+                setFormaPagamento={setFormaPagamento}
+                onNext={handlePagamentoNext}
+                onBack={() => setStep('entrega')}
+                total={totalComTaxa}
+                loading={loading}
+              />
+            </>
+          )}
+
+          {step === 'processando' && mpData && (
+            <StepProcessandoMP
+              initPoint={mpData.initPoint}
+              total={totalComTaxa}
+              onCancelar={() => setStep('pagamento')}
+            />
           )}
 
           {step === 'confirmado' && (
@@ -701,7 +570,9 @@ export default function CheckoutModal({
               formaPagamento={formaPagamento}
               tipoEntrega={tipoEntrega}
               total={totalFinal}
-              onClose={handleFecharEAcompanhar}
+              tempoEstimado={tempoEstimado}
+              rotaInfo={rotaInfo}
+              onAcompanhar={onAcompanharPedido}
             />
           )}
         </div>
