@@ -321,6 +321,15 @@ export function SelecaoEntregaPedido({
   }
 
   const handleAvancar = () => {
+    // ✅ LOG para debug
+    console.log('🚚 [SelecaoEntrega] Enviando dados:', {
+      tipoEntrega: tipoSelecionado,
+      taxaFrete: tipoSelecionado === 'retirada' ? 0 : taxaFrete,
+      tempoEstimado,
+      rotaInfo
+    });
+
+    // ✅ CORREÇÃO: Usar 'taxaFrete' ao invés de 'taxa_entrega'
     onAvancarPagamento({
       tipoEntrega: tipoSelecionado,
       taxaFrete: tipoSelecionado === 'retirada' ? 0 : taxaFrete,

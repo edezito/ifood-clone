@@ -45,6 +45,7 @@ export function useTipoEntregaController(carrinhoItems = [], usuarioLogado = nul
   // ----------------------------------------------------------------
   const calcularRota = useCallback(async (enderecoDestino, restaurante) => {
     if (!restaurante?.latitude || !restaurante?.longitude || !enderecoDestino) {
+      console.log('⚠️ Sem coordenadas para calcular rota');
       setRotaInfo(null);
       setTaxaFrete(TAXA_FALLBACK);
       return;
@@ -61,9 +62,13 @@ export function useTipoEntregaController(carrinhoItems = [], usuarioLogado = nul
       );
 
       if (rota) {
+        console.log('✅ Rota calculada:', rota);
         setRotaInfo(rota);
-        setTaxaFrete(rota.taxaEntrega);
+        const freteCalculado = rota.taxaEntrega || TAXA_FALLBACK;
+        console.log('💰 Frete calculado pela rota:', freteCalculado);
+        setTaxaFrete(freteCalculado);
       } else {
+        console.log('⚠️ Rota não encontrada, usando fallback');
         setErroRota('Não foi possível calcular a rota para este endereço.');
         setTaxaFrete(TAXA_FALLBACK);
       }
@@ -89,24 +94,36 @@ export function useTipoEntregaController(carrinhoItems = [], usuarioLogado = nul
           0
         );
         setSubtotal(sub);
+        console.log('📊 Subtotal calculado:', sub);
 
         // Monta lista de endereços do usuário
         const lista = montarEnderecos(usuarioLogado);
         setEnderecos(lista);
 
         const endPrincipal = lista.find(e => e.principal);
-        if (endPrincipal) setEnderecoSelecionado(endPrincipal.id);
+        if (endPrincipal) {
+          setEnderecoSelecionado(endPrincipal.id);
+          console.log('📍 Endereço principal:', endPrincipal.logradouro);
+        }
 
         // Busca dados do restaurante e calcula a rota inicial
         if (restauranteId && endPrincipal?.logradouro) {
           const todos = await RestauranteModel.listarTodos();
           const restaurante = todos.find(r => r.id === restauranteId);
           if (restaurante) {
+            console.log('🏪 Restaurante encontrado:', restaurante.nome);
             await calcularRota(endPrincipal.logradouro, restaurante);
+          } else {
+            console.log('⚠️ Restaurante não encontrado, usando frete padrão');
+            setTaxaFrete(TAXA_FALLBACK);
           }
+        } else {
+          console.log('⚠️ Sem endereço ou restaurante, usando frete padrão');
+          setTaxaFrete(TAXA_FALLBACK);
         }
       } catch (err) {
         console.error('[useTipoEntregaController] Erro na inicialização:', err);
+        setTaxaFrete(TAXA_FALLBACK);
       } finally {
         setLoading(false);
       }
@@ -119,12 +136,15 @@ export function useTipoEntregaController(carrinhoItems = [], usuarioLogado = nul
   // Handler: troca tipo de entrega
   // ----------------------------------------------------------------
   const selecionarTipo = useCallback((novoTipo) => {
+    console.log('🔄 Mudando tipo de entrega para:', novoTipo);
     setTipoSelecionado(novoTipo);
     if (novoTipo === 'retirada') {
       setTaxaFrete(TAXA_RETIRADA);
+      console.log('💰 Frete alterado para 0 (retirada)');
     } else {
-      // Restaura a taxa calculada pela rota (ou fallback)
-      setTaxaFrete(rotaInfo?.taxaEntrega ?? TAXA_FALLBACK);
+      const frete = rotaInfo?.taxaEntrega ?? TAXA_FALLBACK;
+      setTaxaFrete(frete);
+      console.log('💰 Frete restaurado para:', frete);
     }
   }, [rotaInfo]);
 
@@ -132,15 +152,20 @@ export function useTipoEntregaController(carrinhoItems = [], usuarioLogado = nul
   // Handler: seleciona endereço e recalcula rota
   // ----------------------------------------------------------------
   const selecionarEndereco = useCallback(async (enderecoId) => {
+    console.log('📍 Selecionando endereço:', enderecoId);
     setEnderecoSelecionado(enderecoId);
 
     const end = enderecos.find(e => e.id === enderecoId);
-    if (!end?.logradouro || tipoSelecionado !== 'entrega') return;
+    if (!end?.logradouro || tipoSelecionado !== 'entrega') {
+      console.log('⚠️ Não é possível calcular rota:', { endereco: end?.logradouro, tipo: tipoSelecionado });
+      return;
+    }
 
     if (restauranteId) {
       const todos = await RestauranteModel.listarTodos();
       const restaurante = todos.find(r => r.id === restauranteId);
       if (restaurante) {
+        console.log('🔄 Recalculando rota para:', end.logradouro);
         await calcularRota(end.logradouro, restaurante);
       }
     }
@@ -149,7 +174,7 @@ export function useTipoEntregaController(carrinhoItems = [], usuarioLogado = nul
   // ----------------------------------------------------------------
   // Dados derivados
   // ----------------------------------------------------------------
-  const totalPedido = subtotal + taxaFrete;
+  const totalPedido = subtotal + (tipoSelecionado === 'retirada' ? 0 : taxaFrete);
 
   const podeAvancar =
     tipoSelecionado === 'retirada' ||
@@ -173,14 +198,16 @@ export function useTipoEntregaController(carrinhoItems = [], usuarioLogado = nul
     if (!podeAvancar) return false;
     setSalvando(true);
     try {
-      console.log('📡 [TipoEntrega] Seleção confirmada:', {
+      const dadosConfirmados = {
         tipoEntrega: tipoSelecionado,
-        taxaFrete,
+        taxaFrete: tipoSelecionado === 'retirada' ? 0 : taxaFrete,
         tempoEstimado,
         rotaInfo,
         enderecoId: tipoSelecionado === 'entrega' ? enderecoSelecionado : null,
-      });
-      return true;
+      };
+      
+      console.log('📡 [TipoEntrega] Seleção confirmada:', dadosConfirmados);
+      return dadosConfirmados;
     } catch (error) {
       console.error('[TipoEntrega] Erro ao confirmar:', error);
       throw error;

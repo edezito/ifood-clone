@@ -159,6 +159,14 @@ function StepResumo({ carrinho, calcularTotal, onNext }) {
 
 /* ─── STEP PROCESSANDO MERCADO PAGO ──────────────────────── */
 function StepProcessandoMP({ initPoint, total, onCancelar }) {
+  // ✅ Abre o link automaticamente quando o componente montar
+  React.useEffect(() => {
+    if (initPoint) {
+      // Abre em nova aba
+      window.open(initPoint, '_blank');
+    }
+  }, [initPoint]);
+
   return (
     <div style={{ textAlign: 'center', padding: '20px 0', animation: 'slideStep 0.3s ease-out' }}>
       <div style={{
@@ -174,12 +182,22 @@ function StepProcessandoMP({ initPoint, total, onCancelar }) {
         fontFamily: "'Syne', sans-serif", fontWeight: 900,
         fontSize: 20, color: '#1f2937', marginBottom: 16,
       }}>
-        Finalizar Pagamento
+        Redirecionando para o Mercado Pago...
       </h3>
+
+      <div style={{
+        display: 'flex', justifyContent: 'center', marginBottom: 24,
+      }}>
+        <Loader size={48} color="#EA1D2C" style={{ animation: 'spin 1s linear infinite' }} />
+      </div>
 
       <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 24, lineHeight: 1.6 }}>
         Você será redirecionado para o Mercado Pago.<br />
         Lá você pode pagar com <strong>PIX, Cartão ou Boleto</strong>.
+      </p>
+
+      <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 20 }}>
+        Se não for redirecionado automaticamente, clique no botão abaixo:
       </p>
 
       <a
@@ -188,19 +206,15 @@ function StepProcessandoMP({ initPoint, total, onCancelar }) {
         rel="noopener noreferrer"
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 10,
-          padding: '16px 32px',
+          padding: '14px 28px',
           background: 'linear-gradient(135deg, #009EE3, #007BB5)',
           color: '#fff', borderRadius: 14, textDecoration: 'none',
-          fontWeight: 800, fontSize: 16, fontFamily: "'DM Sans', sans-serif",
-          boxShadow: '0 6px 20px rgba(0,158,227,0.35)', marginBottom: 16,
+          fontWeight: 700, fontSize: 14, fontFamily: "'DM Sans', sans-serif",
+          boxShadow: '0 4px 12px rgba(0,158,227,0.35)', marginBottom: 16,
         }}
       >
-        <ExternalLink size={18} /> Pagar {formatCurrency(total)}
+        <ExternalLink size={16} /> Abrir Pagamento
       </a>
-
-      <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 20 }}>
-        Após o pagamento, você será redirecionado de volta
-      </p>
 
       <button
         onClick={onCancelar}
@@ -343,8 +357,17 @@ export default function CheckoutModal({
 
   // Chamado pelo SelecaoEntregaPedido ao confirmar entrega
   const handleEntregaConfirmada = ({ tipoEntrega: tipo, taxaFrete: taxa, tempoEstimado: tempo, rotaInfo: rota }) => {
-    setTipoEntrega(tipo === 'retirada' ? 'Retirada' : 'Entrega');
-    setTaxaFrete(taxa ?? 0);
+    // ✅ LOG para debug
+    console.log('📦 [CheckoutModal] Recebendo do SelecaoEntrega:', { tipo, taxa, tempo, rota });
+    
+    // ✅ Converte e atualiza os estados
+    const novoTipo = tipo === 'retirada' ? 'Retirada' : 'Entrega';
+    const novoFrete = tipo === 'retirada' ? 0 : Number(taxa || 0);
+    
+    console.log('💰 [CheckoutModal] Frete recebido:', novoFrete);
+    
+    setTipoEntrega(novoTipo);
+    setTaxaFrete(novoFrete);
     setTempoEstimado(tempo ?? null);
     setRotaInfo(rota ?? null);
     setStep('pagamento');
@@ -353,6 +376,18 @@ export default function CheckoutModal({
   const totalComTaxa = subtotal + (tipoEntrega === 'Retirada' ? 0 : taxaFrete);
 
   const handlePagamentoNext = async () => {
+    const freteFinal = tipoEntrega === 'Retirada' ? 0 : taxaFrete;
+    const totalComTaxa = subtotal + freteFinal;
+    
+    console.log('📦 Enviando para processamento:', {
+      tipoEntrega,
+      formaPagamento,
+      total: totalComTaxa,
+      taxaFrete: freteFinal,
+      subtotal,
+      tempoEstimado
+    });
+
     setTotalFinal(totalComTaxa);
     setLoading(true);
     setErrorMsg('');
@@ -362,17 +397,30 @@ export default function CheckoutModal({
         tipoEntrega,
         formaPagamento,
         total: totalComTaxa,
-        taxaFrete,
+        taxaFrete: freteFinal,
         tempoEstimado,
         rotaInfo,
+        carrinho,
+        usuarioLogado
       });
+
+      console.log('✅ Resultado do processamento:', resultado);
 
       if (resultado.sucesso) {
         setPedidoId(resultado.pagamento?.pedido_id || resultado.pedido?.id || 'FE001');
 
-        if (formaPagamento === 'Mercado Pago') {
-          setMpData({ initPoint: resultado.initPoint, preferenceId: resultado.preferenceId });
+        if (formaPagamento === 'Mercado Pago' && resultado.initPoint) {
+          // ✅ Para Mercado Pago, mostra o step processando e depois redireciona
+          setMpData({ 
+            initPoint: resultado.initPoint, 
+            preferenceId: resultado.preferenceId 
+          });
           setStep('processando');
+          
+          // ✅ Abre o link em nova aba automaticamente após 500ms
+          setTimeout(() => {
+            window.open(resultado.initPoint, '_blank');
+          }, 500);
         } else {
           setStep('confirmado');
         }
@@ -380,7 +428,7 @@ export default function CheckoutModal({
         setErrorMsg(resultado.mensagem || 'Pagamento não processado. Tente novamente.');
       }
     } catch (error) {
-      console.error('Erro ao processar pagamento:', error);
+      console.error('❌ Erro ao processar pagamento:', error);
       setErrorMsg('Erro ao processar pagamento. Tente novamente.');
     } finally {
       setLoading(false);
@@ -457,7 +505,7 @@ export default function CheckoutModal({
             />
           )}
 
-          {/* NOVO STEP DE ENTREGA INLINE AQUI 👇 */}
+          {/* STEP DE ENTREGA */}
           {step === 'entrega' && (
             <SelecaoEntregaPedido
               carrinhoItems={carrinho}
@@ -491,7 +539,7 @@ export default function CheckoutModal({
                     {tempoEstimado?.texto || (tipoEntrega === 'Entrega' ? '~35 min' : '~15 min')}
                     {tipoEntrega === 'Entrega' && taxaFrete > 0 && (
                       <span style={{ marginLeft: 6, color: '#EA1D2C', fontWeight: 600 }}>
-                        · +R$ {taxaFrete.toFixed(2).replace('.', ',')} frete
+                        · +{formatCurrency(taxaFrete)} frete
                       </span>
                     )}
                     {tipoEntrega === 'Retirada' && (

@@ -632,7 +632,23 @@ function ClienteApp({ onLogout }) {
 
   // Handler para confirmação de pedido
   const handlePedidoConfirmado = async (dadosCheckout) => {
-    return await ctrl.finalizarPedido(dadosCheckout);
+    console.log('🏠 [ClienteApp] Dados recebidos do checkout:', dadosCheckout);
+    console.log('💰 [ClienteApp] taxaFrete recebido:', dadosCheckout.taxaFrete);
+    
+    // ✅ Certifique-se de que todos os dados estão sendo passados
+    const resultado = await ctrl.finalizarPedido({
+      tipoEntrega: dadosCheckout.tipoEntrega,
+      formaPagamento: dadosCheckout.formaPagamento,
+      total: dadosCheckout.total,
+      taxaFrete: dadosCheckout.taxaFrete,  // ✅ Passa o frete explicitamente
+      tempoEstimado: dadosCheckout.tempoEstimado,
+      rotaInfo: dadosCheckout.rotaInfo,
+      carrinho: dadosCheckout.carrinho,
+      usuarioLogado: dadosCheckout.usuarioLogado
+    });
+    
+    console.log('🏠 [ClienteApp] Resultado do finalizarPedido:', resultado);
+    return resultado;
   };
 
   return (

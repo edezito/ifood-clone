@@ -8,12 +8,21 @@ export const ApiService = {
   async criarPreferenciaMP(dados) {
     try {
       console.log('🔄 Chamando Edge Function criar-preferencia...');
+      console.log('📦 Dados recebidos para enviar:', {
+        carrinhoLength: dados.carrinho?.length,
+        tipoEntrega: dados.tipoEntrega,
+        taxaFrete: dados.taxaFrete,  // ✅ Log para debug
+        usuarioLogado: dados.usuarioLogado?.email,
+        pedidoId: dados.pedidoId
+      });
       
       const { data, error } = await supabase.functions.invoke('criar-preferencia', {
         body: {
           carrinho: dados.carrinho,
           tipoEntrega: dados.tipoEntrega,
-          usuarioLogado: dados.usuarioLogado
+          taxaFrete: dados.taxaFrete,  // ✅ CORREÇÃO: Adicionar taxaFrete
+          usuarioLogado: dados.usuarioLogado,
+          pedidoId: dados.pedidoId  // ✅ CORREÇÃO: Adicionar pedidoId
         }
       });
 
