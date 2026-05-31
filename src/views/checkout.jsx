@@ -4,7 +4,7 @@ import {
   MapPin, ChevronRight, ExternalLink, Clock, Navigation
 } from 'lucide-react';
 import StepPagamento from './StepPagamento';
-import SelecaoEntregaPedido from './SelecaoEntregaPedido';
+import {SelecaoEntregaPedido} from './SelecaoEntregaPedido';
 
 /* ─── ESTILOS DO CHECKOUT ─────────────────────────────────── */
 const CHECKOUT_STYLES = `
@@ -153,33 +153,6 @@ function StepResumo({ carrinho, calcularTotal, onNext }) {
       >
         Continuar <ChevronRight size={16} />
       </button>
-    </div>
-  );
-}
-
-/* ─── STEP ENTREGA (wrapper fullscreen para SelecaoEntregaPedido) ── */
-function StepEntregaFullscreen({
-  carrinho,
-  usuarioLogado,
-  restauranteId,
-  calcularTotal,
-  onConfirmar,
-  onVoltar,
-}) {
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 80,
-      background: 'white',
-      animation: 'slideStep 0.25s ease-out',
-      overflowY: 'auto',
-    }}>
-      <SelecaoEntregaPedido
-        carrinhoItems={carrinho}
-        usuarioLogado={usuarioLogado}
-        restauranteId={restauranteId}
-        onVoltar={onVoltar}
-        onAvancarPagamento={onConfirmar}
-      />
     </div>
   );
 }
@@ -416,23 +389,6 @@ export default function CheckoutModal({
 
   const handleFechar = () => onClose();
 
-  // Etapa de entrega ocupa a tela toda (fora do modal)
-  if (step === 'entrega') {
-    return (
-      <>
-        <style>{CHECKOUT_STYLES}</style>
-        <StepEntregaFullscreen
-          carrinho={carrinho}
-          usuarioLogado={usuarioLogado}
-          restauranteId={restauranteId}
-          calcularTotal={calcularTotal}
-          onConfirmar={handleEntregaConfirmada}
-          onVoltar={() => setStep('resumo')}
-        />
-      </>
-    );
-  }
-
   return (
     <>
       <style>{CHECKOUT_STYLES}</style>
@@ -475,8 +431,8 @@ export default function CheckoutModal({
             </button>
           )}
 
-          {/* Progress bar (nos steps modais) */}
-          {['resumo', 'pagamento'].includes(step) && (
+          {/* Progress bar agora engloba a entrega também */}
+          {['resumo', 'entrega', 'pagamento'].includes(step) && (
             <ProgressBar step={step} />
           )}
 
@@ -498,6 +454,17 @@ export default function CheckoutModal({
               calcularTotal={calcularTotal}
               endereco={usuarioLogado?.endereco || endereco}
               onNext={handleResumoNext}
+            />
+          )}
+
+          {/* NOVO STEP DE ENTREGA INLINE AQUI 👇 */}
+          {step === 'entrega' && (
+            <SelecaoEntregaPedido
+              carrinhoItems={carrinho}
+              usuarioLogado={usuarioLogado}
+              restauranteId={restauranteId}
+              onVoltar={() => setStep('resumo')}
+              onAvancarPagamento={handleEntregaConfirmada}
             />
           )}
 
