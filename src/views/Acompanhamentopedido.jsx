@@ -20,6 +20,10 @@ import {
   Sparkles
 } from 'lucide-react';
 
+import AvaliacaoPedido from './AvaliacaoPedido';
+
+const usuarioLogado = JSON.parse(localStorage.getItem('usuario') || 'null');
+
 // ============================================================
 // MAPA DE ESTILOS POR STATUS
 // Definido aqui (e não no model) para que o Tailwind encontre
@@ -397,8 +401,9 @@ function OrderSummary({ itens, pedido }) {
 // ============================================================
 // COMPONENTE PRINCIPAL
 // ============================================================
-function AcompanhamentoPedido({ pedidoId, onVoltarAoMenu }) {
+function AcompanhamentoPedido({ pedidoId, onVoltarAoMenu, usuarioLogado }) {
   const [activeTab, setActiveTab] = useState('tracker');
+  const [mostrarAvaliacao, setMostrarAvaliacao] = useState(false); // ← ADICIONE ISSO
   
   const {
     pedido,
@@ -503,28 +508,57 @@ function AcompanhamentoPedido({ pedidoId, onVoltarAoMenu }) {
           </div>
 
           {/* Conteúdo */}
-          {activeTab === 'tracker' ? (
-            <div className="space-y-4">
-              <ProgressTracker 
-                statusAtual={pedido.status}
-                passos={STATUS_PASSOS.map((p) => ({ ...p, icon: STATUS_STYLES[p.key]?.icon ?? Clock }))}
-                indiceAtual={indiceStatusAtual}
-              />
-              
-              {statusNormalizado === 'Em Trânsito' && <DeliveryPIN pin={pedido.pin_entrega} />}
-              {statusNormalizado === 'Entregue' && <SuccessCard />}
-            </div>
-          ) : (
-            <OrderSummary itens={itens} pedido={pedido} />
-          )}
+          <div className="mt-4"> 
+            {activeTab === 'tracker' ? (
+              <div className="space-y-4">
+                <ProgressTracker 
+                  statusAtual={pedido.status}
+                  passos={STATUS_PASSOS.map((p) => ({ ...p, icon: STATUS_STYLES[p.key]?.icon ?? Clock }))}
+                  indiceAtual={indiceStatusAtual}
+                />
+                
+                {statusNormalizado === 'Em Trânsito' && <DeliveryPIN pin={pedido.pin_entrega} />}
+                
+                {statusNormalizado === 'Entregue' && (
+                  <div className="space-y-3">
+                    <SuccessCard />
+                    <button
+                      onClick={() => setMostrarAvaliacao(true)}
+                      style={{
+                        width: '100%', padding: '14px',
+                        borderRadius: 16, border: '2px solid #EF9F27',
+                        background: '#FAEEDA', color: '#854F0B',
+                        fontFamily: 'Syne, sans-serif', fontWeight: 800,
+                        fontSize: 15, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      }}
+                    >
+                      ⭐ Avaliar pedido
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <OrderSummary itens={itens} pedido={pedido} />
+            )}
 
-          {/* Botão voltar */}
-          <button
-            onClick={onVoltarAoMenu}
-            className="w-full py-3 text-gray-600 hover:text-gray-800 font-medium transition-colors"
-          >
-            ← Voltar para o início
-          </button>
+            {/* Modal ou Componente de Avaliação */}
+            {mostrarAvaliacao && (
+              <AvaliacaoPedido
+                pedido={pedido}
+                usuarioLogado={usuarioLogado}
+                onFechar={() => setMostrarAvaliacao(false)}
+              />
+            )}
+
+            {/* Botão voltar */}
+            <button
+              onClick={onVoltarAoMenu}
+              className="w-full py-6 text-gray-600 hover:text-gray-800 font-medium transition-colors"
+            >
+              ← Voltar para o início
+            </button>
+          </div>
         </main>
       </div>
     </div>

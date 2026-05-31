@@ -5,10 +5,13 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   Store, ShoppingBag, Package, MapPin, Edit2, Trash2,
-  CheckCircle, Clock, X, PlusCircle, AlertCircle, LogOut, Mail
+  CheckCircle, Clock, X, PlusCircle, AlertCircle, LogOut, Mail, BarChart3
 } from 'lucide-react';
 import NotificacaoService from '../services/Notificacaoservice';
 import { StatusModel } from '../models/statusModel';
+import DashboardRelatorios from './DashboardRelatorios';
+import RelatorioProdutos from './RelatorioProdutos';
+import RelatorioClientes from './RelatorioClientes';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -71,10 +74,12 @@ function AdminDashboard({ onLogout }) {
   const [restaurantes, setRestaurantes] = useState([]);
   const [produtos, setProdutos] = useState([]);
   const [pedidos, setPedidos] = useState([]);
+  const [clientes, setClientes] = useState([]);
 
   const [mensagem, setMensagem] = useState('');
   const [tipoMensagem, setTipoMensagem] = useState('info');
   const [abaAtiva, setAbaAtiva] = useState('pedidos');
+  const [subAbaRelatorio, setSubAbaRelatorio] = useState('performance');
   const [showFormulario, setShowFormulario] = useState(false);
 
   const [nomeRest, setNomeRest] = useState('');
@@ -103,14 +108,23 @@ function AdminDashboard({ onLogout }) {
   };
 
   const fetchDados = async () => {
-    const { data: rests } = await supabase.from('restaurantes').select('*');
-    if (rests) setRestaurantes(rests);
+    try {
+      const { data: rests } = await supabase.from('restaurantes').select('*');
+      if (rests) setRestaurantes(rests);
 
-    const { data: prods } = await supabase.from('produtos').select('*');
-    if (prods) setProdutos(prods);
+      const { data: prods } = await supabase.from('produtos').select('*');
+      if (prods) setProdutos(prods);
 
-    const { data: peds } = await supabase.from('pedidos').select('*').order('criado_em', { ascending: false });
-    if (peds) setPedidos(peds);
+      const { data: peds } = await supabase.from('pedidos').select('*').order('criado_em', { ascending: false });
+      if (peds) setPedidos(peds);
+
+      // Buscar dados de clientes para relatórios
+      const { data: cli } = await supabase.from('clientes').select('*');
+      if (cli) setClientes(cli);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+      mostrarMensagem('Erro ao carregar dados', 'error');
+    }
   };
 
   const obterCoordenadas = async (enderecoDigitado) => {
@@ -372,14 +386,21 @@ function AdminDashboard({ onLogout }) {
           {[
             { id: 'pedidos', label: 'Pedidos Ativos', icon: Package },
             { id: 'catalogo', label: 'Meu Catálogo', icon: ShoppingBag },
-            { id: 'gerenciar', label: 'Gerenciar Lojas', icon: Store }
+            { id: 'gerenciar', label: 'Gerenciar Lojas', icon: Store },
+            { id: 'relatorios', label: 'Relatórios', icon: BarChart3 }
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = abaAtiva === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => { setAbaAtiva(tab.id); setShowFormulario(false); cancelarEdicaoRest(); }}
+                onClick={() => { 
+                  setAbaAtiva(tab.id); 
+                  if (tab.id !== 'catalogo' && tab.id !== 'gerenciar') {
+                    setShowFormulario(false);
+                    cancelarEdicaoRest();
+                  }
+                }}
                 className={`flex items-center gap-2 py-4 border-b-2 font-bold whitespace-nowrap transition-colors ${
                   isActive ? 'border-red-600 text-red-600' : 'border-transparent text-gray-500 hover:text-gray-800'
                 }`}
@@ -393,7 +414,77 @@ function AdminDashboard({ onLogout }) {
 
       <main className="max-w-7xl mx-auto px-4 py-6">
 
-       {/* ABA: PEDIDOS */}
+        {/* ABA: RELATÓRIOS */}
+        {abaAtiva === 'relatorios' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-black text-gray-800">Relatórios e Análises</h2>
+            </div>
+
+            {/* Sub-abas de relatórios */}
+            <div className="flex gap-2 border-b border-gray-200 pb-2 mb-6">
+              <button
+                onClick={() => setSubAbaRelatorio('performance')}
+                className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+                  subAbaRelatorio === 'performance'
+                    ? 'bg-white border border-b-white border-gray-200 text-red-600'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                }`}
+              >
+                <BarChart3 size={16} className="inline mr-2" />
+                Performance Financeira
+              </button>
+              <button
+                onClick={() => setSubAbaRelatorio('produtos')}
+                className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+                  subAbaRelatorio === 'produtos'
+                    ? 'bg-white border border-b-white border-gray-200 text-red-600'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                }`}
+              >
+                <Package size={16} className="inline mr-2" />
+                Produtos Mais Vendidos
+              </button>
+              <button
+                onClick={() => setSubAbaRelatorio('clientes')}
+                className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+                  subAbaRelatorio === 'clientes'
+                    ? 'bg-white border border-b-white border-gray-200 text-red-600'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                }`}
+              >
+                <ShoppingBag size={16} className="inline mr-2" />
+                Análise de Clientes
+              </button>
+            </div>
+
+            {/* Conteúdo do relatório selecionado */}
+            <div className="bg-white rounded-xl shadow-sm">
+              {subAbaRelatorio === 'performance' && (
+                <DashboardRelatorios 
+                  restaurantes={restaurantes}
+                  pedidos={pedidos}
+                />
+              )}
+              {subAbaRelatorio === 'produtos' && (
+                <RelatorioProdutos 
+                  produtos={produtos}
+                  pedidos={pedidos}
+                  restaurantes={restaurantes}
+                />
+              )}
+              {subAbaRelatorio === 'clientes' && (
+                <RelatorioClientes 
+                  clientes={clientes}
+                  pedidos={pedidos}
+                  restaurantes={restaurantes}
+                />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ABA: PEDIDOS */}
         {abaAtiva === 'pedidos' && (
           <div className="space-y-4">
             <h2 className="text-xl font-black text-gray-800">Pedidos em andamento</h2>

@@ -1,10 +1,11 @@
-// ============================================================
-// SERVICE: supabaseClient
-// Responsabilidade: instância única do cliente Supabase
-// ============================================================
 import { createClient } from '@supabase/supabase-js';
+import { ENV } from '../config/env'; // Verifique se o caminho está correto
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Validação de segurança para te ajudar no console se algo sumir
+if (!ENV.SUPABASE_URL || !ENV.SUPABASE_ANON_KEY) {
+  console.error(
+    "🚨 Erro: SUPABASE_URL ou SUPABASE_ANON_KEY não definidos no arquivo .env ou no ENV.js"
+  );
+}
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY);

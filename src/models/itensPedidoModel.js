@@ -21,7 +21,6 @@ export class ItensPedidoModel {
           produtos:produto_id (
             id,
             nome,
-            descricao,
             preco
           )
         `)

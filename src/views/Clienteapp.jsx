@@ -579,7 +579,8 @@ function ClienteApp({ onLogout }) {
 if (ctrl.pedidoAtivoId) {
   return (
     <AcompanhamentoPedido 
-      pedidoId={ctrl.pedidoAtivoId} 
+      pedidoId={ctrl.pedidoAtivoId}
+      usuarioLogado={ctrl.usuarioLogado}
       onVoltarAoMenu={() => ctrl.setPedidoAtivoId(null)} 
     />
   );
