@@ -5,7 +5,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   Store, Star, ShoppingBag, Package, MapPin, Edit2, Trash2,
-  CheckCircle, Clock, X, PlusCircle, AlertCircle, LogOut, Mail, BarChart3
+  CheckCircle, Clock, X, PlusCircle, AlertCircle, LogOut, Mail, BarChart3,
+  FileText  // ✅ NOVO - Ícone para nota fiscal
 } from 'lucide-react';
 import NotificacaoService from '../services/Notificacaoservice';
 import { StatusModel } from '../models/statusModel';
@@ -96,6 +97,7 @@ function AdminDashboard({ onLogout }) {
   const [editandoProdId, setEditandoProdId] = useState(null);
   const [buscandoCoordenadas, setBuscandoCoordenadas] = useState(false);
   const [enviandoPin, setEnviandoPin] = useState(null);
+  const [enviandoNota, setEnviandoNota] = useState(null); // ✅ NOVO - Estado para reenvio de nota fiscal
 
   useEffect(() => {
     fetchDados();
@@ -335,6 +337,22 @@ function AdminDashboard({ onLogout }) {
     }
   };
 
+  // ✅ NOVA FUNÇÃO - Reenvio de nota fiscal
+  const handleReenviarNota = async (ped) => {
+    setEnviandoNota(ped.id);
+    await NotificacaoService.reenviarNotaFiscal(
+      ped,
+      (msg) => { 
+        mostrarMensagem(msg, 'success'); 
+        setEnviandoNota(null); 
+      },
+      (msg) => { 
+        mostrarMensagem(msg, 'error');   
+        setEnviandoNota(null); 
+      }
+    );
+  };
+
   const getStatusBadge = (status) => {
     const styles = {
       'Aguardando': 'bg-amber-100 text-amber-800 border-amber-200',
@@ -534,6 +552,7 @@ function AdminDashboard({ onLogout }) {
                       </div>
                     </div>
 
+                    {/* ✅ BLOCOS DE BOTÕES ATUALIZADO COM NOTA FISCAL */}
                     <div className="flex flex-wrap gap-2">
                       {statusNormalizado === 'Aguardando' && (
                         <button onClick={() => handleAtualizarStatus(ped.id, 'Em Preparação')}
@@ -566,6 +585,21 @@ function AdminDashboard({ onLogout }) {
                           )}
                         </>
                       )}
+
+                      {/* ✅ BOTÃO NOTA FISCAL (exibido para todos os pedidos com email) */}
+                      {ped.email && (
+                        <button
+                          onClick={() => handleReenviarNota(ped)}
+                          disabled={enviandoNota === ped.id}
+                          className="flex items-center gap-1.5 bg-white border-2 border-green-200 text-green-700 hover:bg-green-50 font-bold py-2 px-4 rounded-xl active:scale-95 transition-all disabled:opacity-50"
+                          title="Enviar nota fiscal por e-mail"
+                        >
+                          <FileText size={15} />
+                          {enviandoNota === ped.id ? 'Enviando...' : 'Nota Fiscal'}
+                        </button>
+                      )}
+                      {/* ───────────────────────────────────────────────────────────── */}
+
                       {(statusNormalizado !== 'Entregue' && statusNormalizado !== 'Cancelado') && (
                         <button onClick={() => { if (window.confirm('Cancelar este pedido?')) handleAtualizarStatus(ped.id, 'Cancelado'); }}
                           className="flex-1 sm:flex-none bg-white border-2 border-red-100 text-red-600 hover:bg-red-50 font-bold py-2 px-6 rounded-xl active:scale-95 transition-all">
@@ -573,6 +607,7 @@ function AdminDashboard({ onLogout }) {
                         </button>
                       )}
                     </div>
+                    {/* FIM DOS BOTÕES */}
                   </div>
                 );
               })
@@ -833,7 +868,7 @@ function AdminDashboard({ onLogout }) {
                   <div key={rest.id} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                     <div className="flex justify-between items-start mb-4">
                       <div>
-                        {/* INÍCIO DA ATUALIZAÇÃO DO SCORE */}
+                        {/* Score / Avaliações */}
                         <div className="flex items-center gap-3">
                           <h3 className="font-black text-xl text-gray-800">{rest.nome}</h3>
                           
@@ -850,7 +885,6 @@ function AdminDashboard({ onLogout }) {
                             {rest.score ? Number(rest.score).toFixed(1) : 'Novo'}
                           </div>
                         </div>
-                        {/* FIM DA ATUALIZAÇÃO DO SCORE */}
                         
                         <p className="text-sm text-gray-500 mt-1">CNPJ: {rest.cnpj}</p>
                         <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">

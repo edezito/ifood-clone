@@ -1,6 +1,6 @@
 // ============================================================
 // CONTROLLER: useClienteController (ATUALIZADO)
-// Inclui taxaFrete dinâmica via OSRM e tempoEstimado real
+// Inclui taxaFrete dinâmica via OSRM, tempoEstimado real e NOTA FISCAL
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
 import { RestauranteModel } from '../models/restauranteModel';
@@ -10,6 +10,7 @@ import { ItensPedidoModel } from '../models/itensPedidoModel';
 import { ClienteModel } from '../models/clienteModel';
 import { AuthModel } from '../models/authModel';
 import { PaymentService } from '../services/paymentservice';
+import { NotaFiscalService } from '../services/notaFiscalService'; // ✅ NOVO - Envio de nota fiscal
 
 const ENDERECO_PADRAO = 'Rua Augusta, 123 - Consolação, São Paulo - SP';
 
@@ -154,8 +155,9 @@ export function useClienteController() {
   };
 
   // ----------------------------------------------------------
-  // Finalizar pedido - CORRIGIDO
+  // Finalizar pedido - ATUALIZADO COM NOTA FISCAL
   // Agora recebe taxaFrete calculada pelo OSRM via checkout
+  // E envia nota fiscal automaticamente após confirmação
   // ----------------------------------------------------------
   const finalizarPedido = async ({
     tipoEntrega,
@@ -167,8 +169,8 @@ export function useClienteController() {
     dadosCartao = null,
     acao = null,
     pedidoId = null,
-    carrinho: carrinhoParam,  // ✅ Adicionado para receber carrinho
-    usuarioLogado: usuarioParam, // ✅ Adicionado para receber usuário
+    carrinho: carrinhoParam,
+    usuarioLogado: usuarioParam,
   }) => {
     // Log para debug
     console.log('🎮 [Controller] finalizarPedido recebeu:', {
@@ -250,7 +252,7 @@ export function useClienteController() {
         }))
       );
 
-      // 3. Processar pagamento - ✅ CORREÇÃO AQUI
+      // 3. Processar pagamento
       console.log('💰 Enviando para PaymentService com taxaFrete:', taxaFrete);
       
       const resultadoPagamento = await PaymentService.processarPagamento({
@@ -261,14 +263,29 @@ export function useClienteController() {
         usuarioLogado: usuario,
         carrinho: carrinhoAtual,
         tipoEntrega,
-        taxaFrete: tipoEntrega === 'Retirada' ? 0 : taxaFrete, // ✅ ENVIA O FRETE
+        taxaFrete: tipoEntrega === 'Retirada' ? 0 : taxaFrete,
       });
 
       console.log('🎮 Resultado do pagamento:', resultadoPagamento);
 
-      // 4. Atualizar status do pedido
+      // 4. Atualizar status do pedido e enviar nota fiscal
       if (resultadoPagamento.sucesso) {
         await PedidoModel.atualizarStatus(pedido.id, 'Confirmado');
+        
+        // ── ✅ ENVIO DE NOTA FISCAL (fire-and-forget, não bloqueia o checkout) ──
+        if (usuario.email) {
+          console.log('📧 Enviando nota fiscal para:', usuario.email);
+          NotaFiscalService.enviarAposConfirmacao({
+            id: pedido.id,
+            email: usuario.email,
+            status: 'Confirmado',
+          }).catch(err => {
+            console.error('❌ Erro ao enviar nota fiscal (não crítico):', err);
+          });
+        } else {
+          console.warn('⚠️ Usuário sem email cadastrado, nota fiscal não enviada');
+        }
+        // ────────────────────────────────────────────────────────────────────────
         
         // Limpa o carrinho após pedido bem sucedido
         setCarrinho([]);
