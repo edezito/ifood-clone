@@ -1,12 +1,12 @@
 // ============================================================
 // VIEW: ClienteApp (ATUALIZADO) — FoodExpress
-// Integra CheckoutModal com seleção de entrega e pagamento
+// Integra CheckoutModal com seleção de entrega e pagamento + Score
 // ============================================================
 import React, { useState, useMemo } from 'react';
 import {
   Search, ShoppingCart, Plus, X, ChevronDown,
   Clock, MapPin, LogOut, ArrowRight, Utensils, Truck, Award,
-  HelpCircle, ChevronUp, Minus,
+  HelpCircle, ChevronUp, Minus, Star
 } from 'lucide-react';
 import { useClienteController } from '../controllers/useClienteController';
 import AcompanhamentoPedido from './Acompanhamentopedido';
@@ -40,6 +40,7 @@ const tokens = `
   --green:      #50A773;
   --green-light:#E8F5EE;
   --yellow:     #FFB800;
+  --warning:    #EF9F27;
   --radius-sm:  8px;
   --radius-md:  12px;
   --radius-lg:  16px;
@@ -244,37 +245,61 @@ function ProductCard({ produto, restaurante, onAdd }) {
     brasileira: '🥘', massas: '🍝', saudavel: '🥗',
   };
   const emoji = categoryEmoji[restaurante?.categoria] || '🍽️';
+  
+  // Variáveis para as Avaliações
+  const nomeRestaurante = restaurante?.nome || 'Restaurante';
+  const scoreRestaurante = restaurante?.score;
+  const totalAvaliacoes = restaurante?.total_avaliacoes;
 
   return (
     <div style={{
       background: 'var(--white)', borderRadius: 'var(--radius-lg)',
       overflow: 'hidden', border: '1px solid var(--gray-200)',
       transition: 'all 0.3s cubic-bezier(0.4,0,0.2,1)',
+      display: 'flex', flexDirection: 'column'
     }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-xl)'; e.currentTarget.style.transform = 'translateY(-4px)'; }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
+      onMouseEnter={e => { e.currentTarget.style.boxShadow = 'var(--shadow-xl)'; e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = 'var(--primary-light)'; }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = 'var(--gray-200)'; }}
     >
       <div style={{
         height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: 'linear-gradient(135deg, var(--gray-50), var(--gray-100))',
         fontSize: 56,
       }}>{emoji}</div>
-      <div style={{ padding: '20px' }}>
-        {restaurante?.nome && (
-          <span style={{
-            display: 'inline-block', fontSize: 11, fontWeight: 600,
-            color: 'var(--primary)', background: 'var(--primary-light)',
-            padding: '3px 10px', borderRadius: 'var(--radius-full)', marginBottom: 10,
-          }}>{restaurante.nome}</span>
-        )}
+      <div style={{ padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        
+        {/* Avaliação e Nome da Loja - INTEGRADO AQUI */}
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+          {restaurante?.nome && (
+            <span style={{
+              display: 'inline-block', fontSize: 11, fontWeight: 600,
+              color: 'var(--primary)', background: 'var(--primary-light)',
+              padding: '3px 10px', borderRadius: 'var(--radius-full)',
+            }}>
+              {nomeRestaurante}
+            </span>
+          )}
+          
+          <span style={{ color: 'var(--gray-300)' }}>•</span>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} title={totalAvaliacoes ? `${totalAvaliacoes} avaliações` : 'Novo'}>
+            <Star size={12} fill="var(--warning)" color="var(--warning)" />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--gray-700)' }}>
+              {scoreRestaurante > 0 ? Number(scoreRestaurante).toFixed(1) : 'Novo'}
+            </span>
+          </div>
+        </div>
+
         <h3 style={{
           fontFamily: 'Syne, sans-serif', fontWeight: 800,
           fontSize: 17, color: 'var(--gray-900)', lineHeight: 1.3, marginBottom: 8,
         }}>{produto.nome}</h3>
+        
         <p style={{ fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.5, marginBottom: 16 }}>
-          Preparado com ingredientes selecionados
+          {produto.descricao || 'Preparado com ingredientes selecionados'}
         </p>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
           <div>
             <p style={{ fontSize: 11, color: 'var(--gray-400)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>PREÇO</p>
             <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 22, color: 'var(--gray-900)' }}>
@@ -573,41 +598,57 @@ function ClienteApp({ onLogout }) {
   }, [ctrl.carrinho]);
 
   // ============================================================
-// Verificações de estado (CORRIGIDO)
-// ============================================================
+  // Verificações de estado (CORRIGIDO)
+  // ============================================================
 
-if (ctrl.pedidoAtivoId) {
-  return (
-    <AcompanhamentoPedido 
-      pedidoId={ctrl.pedidoAtivoId}
-      usuarioLogado={ctrl.usuarioLogado}
-      onVoltarAoMenu={() => ctrl.setPedidoAtivoId(null)} 
-    />
-  );
-}
+  if (ctrl.pedidoAtivoId) {
+    return (
+      <AcompanhamentoPedido 
+        pedidoId={ctrl.pedidoAtivoId}
+        usuarioLogado={ctrl.usuarioLogado}
+        onVoltarAoMenu={() => ctrl.setPedidoAtivoId(null)} 
+      />
+    );
+  }
 
-if (ctrl.verHistorico) {
-  return (
-    <HistoricoPedidos
-      // 🔥 MUDANÇA AQUI: Passamos o objeto usuarioLogado completo.
-      // Isso permite que o controller busque por EMAIL ou TELEFONE.
-      usuario={ctrl.usuarioLogado} 
-      onVoltar={() => ctrl.setVerHistorico(false)}
-      onVerDetalhes={id => { 
-        ctrl.setPedidoAtivoId(id); 
-        ctrl.setVerHistorico(false); 
-      }}
-    />
-  );
-}
+  if (ctrl.verHistorico) {
+    return (
+      <HistoricoPedidos
+        // 🔥 MUDANÇA AQUI: Passamos o objeto usuarioLogado completo.
+        // Isso permite que o controller busque por EMAIL ou TELEFONE.
+        usuario={ctrl.usuarioLogado} 
+        onVoltar={() => ctrl.setVerHistorico(false)}
+        onVerDetalhes={id => { 
+          ctrl.setPedidoAtivoId(id); 
+          ctrl.setVerHistorico(false); 
+        }}
+      />
+    );
+  }
 
-if (ctrl.precisaLogar) {
-  return <LoginCliente onLoginSucesso={ctrl.loginSucesso} />;
-}
+  if (ctrl.precisaLogar) {
+    return <LoginCliente onLoginSucesso={ctrl.loginSucesso} />;
+  }
 
   // Handler para confirmação de pedido
   const handlePedidoConfirmado = async (dadosCheckout) => {
-    return await ctrl.finalizarPedido(dadosCheckout);
+    console.log('🏠 [ClienteApp] Dados recebidos do checkout:', dadosCheckout);
+    console.log('💰 [ClienteApp] taxaFrete recebido:', dadosCheckout.taxaFrete);
+    
+    // ✅ Certifique-se de que todos os dados estão sendo passados
+    const resultado = await ctrl.finalizarPedido({
+      tipoEntrega: dadosCheckout.tipoEntrega,
+      formaPagamento: dadosCheckout.formaPagamento,
+      total: dadosCheckout.total,
+      taxaFrete: dadosCheckout.taxaFrete,  // ✅ Passa o frete explicitamente
+      tempoEstimado: dadosCheckout.tempoEstimado,
+      rotaInfo: dadosCheckout.rotaInfo,
+      carrinho: dadosCheckout.carrinho,
+      usuarioLogado: dadosCheckout.usuarioLogado
+    });
+    
+    console.log('🏠 [ClienteApp] Resultado do finalizarPedido:', resultado);
+    return resultado;
   };
 
   return (

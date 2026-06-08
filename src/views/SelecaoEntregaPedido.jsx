@@ -1,37 +1,25 @@
-// ============================================================
-// VIEW: SelecaoEntregaPedido
-// Responsabilidade: UI da tela de seleção de tipo de entrega
-// Exibe tempo estimado e taxa calculados via OSRM
-// ============================================================
 import React from 'react';
 import { useTipoEntregaController } from '../controllers/useTipoEntregaController';
 import {
-  ChevronLeft,
-  Bike,
-  Store,
-  MapPin,
-  CheckCircle2,
-  Package as PackageIcon,
-  Receipt,
-  ArrowRight,
-  Clock,
-  Navigation,
-  AlertCircle,
-  Loader,
+  Bike, Store, MapPin, CheckCircle2,
+  Package as PackageIcon, ArrowRight, Clock,
+  Navigation, AlertCircle, Loader, ChevronRight
 } from 'lucide-react';
 
-// ── Loading ────────────────────────────────────────────────
+const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
+
+// ── Loading Inline ─────────────────────────────────────────
 function LoadingSpinner() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="text-center space-y-4">
-        <div className="relative">
-          <div className="w-20 h-20 border-4 border-gray-200 border-t-red-500 rounded-full animate-spin" />
-          <PackageIcon className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-8 h-8 text-red-500" />
+    <div style={{ display: 'flex', minHeight: 300, alignItems: 'center', justifyContent: 'center', animation: 'slideStep 0.3s ease-out' }}>
+      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+        <div style={{ position: 'relative', width: 56, height: 56 }}>
+          <Loader size={56} color="#EA1D2C" style={{ animation: 'spin 1s linear infinite' }} />
+          <PackageIcon size={20} color="#EA1D2C" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
         </div>
         <div>
-          <p className="text-lg font-semibold text-gray-800">Calculando opções...</p>
-          <p className="text-sm text-gray-500 mt-1">Buscando a melhor rota</p>
+          <p style={{ fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 800, color: '#1f2937', margin: '0 0 4px' }}>Calculando opções...</p>
+          <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Buscando a melhor rota</p>
         </div>
       </div>
     </div>
@@ -44,24 +32,20 @@ function TempoBadge({ tempoEstimado, calculandoRota }) {
     return (
       <span style={{
         display: 'inline-flex', alignItems: 'center', gap: 4,
-        fontSize: 12, fontWeight: 600,
-        background: '#f3f4f6', color: '#6b7280',
-        padding: '3px 10px', borderRadius: 999,
+        fontSize: 11, fontWeight: 700, background: '#f3f4f6', color: '#6b7280',
+        padding: '4px 10px', borderRadius: 99, textTransform: 'uppercase', letterSpacing: '0.04em'
       }}>
-        <Loader size={11} className="animate-spin" />
-        Calculando...
+        <Loader size={12} style={{ animation: 'spin 1s linear infinite' }} /> Calculando...
       </span>
     );
   }
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
-      fontSize: 12, fontWeight: 700,
-      background: '#FFF0F0', color: '#C8101E',
-      padding: '3px 10px', borderRadius: 999,
+      fontSize: 11, fontWeight: 800, background: '#FFF0F0', color: '#EA1D2C',
+      padding: '4px 10px', borderRadius: 99, textTransform: 'uppercase', letterSpacing: '0.04em'
     }}>
-      <Clock size={11} />
-      {tempoEstimado.texto}
+      <Clock size={12} strokeWidth={2.5} /> {tempoEstimado.texto}
     </span>
   );
 }
@@ -69,12 +53,8 @@ function TempoBadge({ tempoEstimado, calculandoRota }) {
 // ── Toggle Entrega / Retirada ──────────────────────────────
 function DeliveryToggle({ tipoSelecionado, onSelecionar, tempoEstimado, calculandoRota }) {
   return (
-    <div style={{ background: 'white', padding: '20px 20px 8px' }}>
-      <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 900, fontSize: 17, color: '#1f2937', marginBottom: 14 }}>
-        Como deseja receber?
-      </h2>
-
-      <div style={{ display: 'flex', gap: 10 }}>
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 12 }}>
         {[
           { key: 'entrega', icon: Bike, label: 'Entrega', desc: 'No seu endereço' },
           { key: 'retirada', icon: Store, label: 'Retirada', desc: 'No restaurante' },
@@ -85,22 +65,27 @@ function DeliveryToggle({ tipoSelecionado, onSelecionar, tempoEstimado, calculan
               key={key}
               onClick={() => onSelecionar(key)}
               style={{
-                flex: 1, padding: '14px 12px', borderRadius: 16, cursor: 'pointer',
+                flex: 1, padding: '16px', borderRadius: 14, cursor: 'pointer',
                 border: `2px solid ${ativo ? '#EA1D2C' : '#e5e7eb'}`,
-                background: ativo ? '#FFF0F0' : 'white',
-                textAlign: 'left', transition: 'all 0.2s',
-                display: 'flex', flexDirection: 'column', gap: 4,
+                background: ativo ? '#FFF0F0' : '#fff',
+                textAlign: 'left', transition: 'all 0.2s ease',
+                display: 'flex', flexDirection: 'column', gap: 6,
+                boxShadow: ativo ? '0 4px 12px rgba(234,29,44,0.1)' : 'none',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Icon size={16} color={ativo ? '#EA1D2C' : '#9ca3af'} />
-                <span style={{
-                  fontSize: 14, fontWeight: 700,
-                  color: ativo ? '#EA1D2C' : '#374151',
-                  fontFamily: 'DM Sans, sans-serif',
-                }}>{label}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ 
+                  width: 32, height: 32, borderRadius: 8, 
+                  background: ativo ? '#EA1D2C' : '#f3f4f6', 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center' 
+                }}>
+                  <Icon size={16} color={ativo ? '#fff' : '#9ca3af'} />
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 700, color: ativo ? '#C8101E' : '#374151' }}>
+                  {label}
+                </span>
               </div>
-              <span style={{ fontSize: 12, color: ativo ? '#EA1D2C' : '#9ca3af', opacity: 0.8 }}>{desc}</span>
+              <span style={{ fontSize: 12, color: ativo ? '#EA1D2C' : '#9ca3af', marginBottom: ativo ? 6 : 0 }}>{desc}</span>
               {ativo && <TempoBadge tempoEstimado={tempoEstimado} calculandoRota={calculandoRota} />}
             </button>
           );
@@ -115,18 +100,12 @@ function RotaInfoCard({ rotaInfo, calculandoRota, erroRota }) {
   if (calculandoRota) {
     return (
       <div style={{
-        margin: '0 16px', padding: '14px 16px', borderRadius: 14,
-        background: '#f8fafc', border: '1px solid #e5e7eb',
-        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '12px 16px', borderRadius: 14, background: '#f9fafb', border: '1px solid #e5e7eb',
+        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20
       }}>
         <Loader size={16} color="#EA1D2C" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }} />
         <div>
-          <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', margin: 0 }}>
-            Calculando rota pela melhor estrada...
-          </p>
-          <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0' }}>
-            Via OpenStreetMap Routing Machine
-          </p>
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', margin: 0 }}>Calculando rota...</p>
         </div>
       </div>
     );
@@ -135,12 +114,11 @@ function RotaInfoCard({ rotaInfo, calculandoRota, erroRota }) {
   if (erroRota) {
     return (
       <div style={{
-        margin: '0 16px', padding: '12px 14px', borderRadius: 14,
-        background: '#fffbeb', border: '1px solid #fde68a',
-        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '12px 16px', borderRadius: 14, background: '#fffbeb', border: '1px solid #fde68a',
+        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20
       }}>
-        <AlertCircle size={15} color="#d97706" style={{ flexShrink: 0 }} />
-        <p style={{ fontSize: 12, color: '#92400e', margin: 0 }}>{erroRota}</p>
+        <AlertCircle size={16} color="#d97706" style={{ flexShrink: 0 }} />
+        <p style={{ fontSize: 12, fontWeight: 500, color: '#92400e', margin: 0 }}>{erroRota}</p>
       </div>
     );
   }
@@ -149,39 +127,29 @@ function RotaInfoCard({ rotaInfo, calculandoRota, erroRota }) {
 
   return (
     <div style={{
-      margin: '0 16px', padding: '14px 16px', borderRadius: 14,
-      background: 'linear-gradient(135deg, #FFF0F0, #fff5f5)',
-      border: '1px solid #fecaca',
+      padding: '14px', borderRadius: 14, background: 'linear-gradient(135deg, #FFF0F0, #fff5f5)',
+      border: '1px solid #fecaca', marginBottom: 20,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-        <Navigation size={14} color="#EA1D2C" />
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#EA1D2C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-          Rota calculada
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+        <Navigation size={12} color="#EA1D2C" />
+        <span style={{ fontSize: 10, fontWeight: 800, color: '#EA1D2C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          Detalhes da Rota
         </span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: 18, fontWeight: 900, color: '#1f2937', margin: 0, fontFamily: 'Syne, sans-serif' }}>
-            {rotaInfo.distanciaKm} km
-          </p>
-          <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0' }}>distância</p>
+          <p style={{ fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 900, color: '#1f2937', margin: 0 }}>{rotaInfo.distanciaKm} km</p>
+          <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0' }}>distância</p>
         </div>
         <div style={{ textAlign: 'center', borderLeft: '1px solid #fecaca', borderRight: '1px solid #fecaca' }}>
-          <p style={{ fontSize: 18, fontWeight: 900, color: '#1f2937', margin: 0, fontFamily: 'Syne, sans-serif' }}>
-            +{rotaInfo.duracaoMin} min
-          </p>
-          <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0' }}>trânsito</p>
+          <p style={{ fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 900, color: '#1f2937', margin: 0 }}>+{rotaInfo.duracaoMin} min</p>
+          <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0' }}>trânsito</p>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: 18, fontWeight: 900, color: '#EA1D2C', margin: 0, fontFamily: 'Syne, sans-serif' }}>
-            {rotaInfo.tempoTotalMin} min
-          </p>
-          <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0' }}>total est.</p>
+          <p style={{ fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 900, color: '#EA1D2C', margin: 0 }}>{rotaInfo.tempoTotalMin} min</p>
+          <p style={{ fontSize: 11, color: '#EA1D2C', fontWeight: 600, margin: '2px 0 0' }}>total est.</p>
         </div>
       </div>
-      <p style={{ fontSize: 10, color: '#d1d5db', textAlign: 'center', marginTop: 8, marginBottom: 0 }}>
-        inclui ~15 min de preparo · via OpenStreetMap
-      </p>
     </div>
   );
 }
@@ -190,38 +158,25 @@ function RotaInfoCard({ rotaInfo, calculandoRota, erroRota }) {
 function AddressSelector({ enderecos, enderecoSelecionado, onSelecionarEndereco, calculandoRota }) {
   if (enderecos.length === 0) {
     return (
-      <div style={{ padding: '0 16px' }}>
-        <div style={{
-          padding: '14px 16px', borderRadius: 14, background: '#fffbeb',
-          border: '1px solid #fde68a', display: 'flex', alignItems: 'flex-start', gap: 8,
-        }}>
-          <AlertCircle size={16} color="#d97706" style={{ flexShrink: 0, marginTop: 1 }} />
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#92400e', margin: 0 }}>
-              Nenhum endereço cadastrado
-            </p>
-            <p style={{ fontSize: 12, color: '#b45309', margin: '2px 0 0' }}>
-              Faça logout e refaça o cadastro para adicionar seu endereço.
-            </p>
-          </div>
+      <div style={{ padding: '16px', borderRadius: 14, background: '#fffbeb', border: '1px solid #fde68a', display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 20 }}>
+        <AlertCircle size={18} color="#d97706" style={{ flexShrink: 0, marginTop: 2 }} />
+        <div>
+          <p style={{ fontSize: 14, fontWeight: 700, color: '#92400e', margin: 0 }}>Nenhum endereço</p>
+          <p style={{ fontSize: 12, color: '#b45309', margin: '4px 0 0', lineHeight: 1.4 }}>Faça logout e refaça o cadastro para adicionar seu endereço.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '0 16px' }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 10,
-      }}>
-        <p style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
-          Endereço de entrega
-        </p>
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          Endereço de Entrega
+        </span>
         {calculandoRota && (
-          <span style={{ fontSize: 11, color: '#EA1D2C', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Loader size={10} style={{ animation: 'spin 1s linear infinite' }} />
-            recalculando taxa...
+          <span style={{ fontSize: 11, color: '#EA1D2C', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Loader size={10} style={{ animation: 'spin 1s linear infinite' }} /> atualizando...
           </span>
         )}
       </div>
@@ -234,39 +189,28 @@ function AddressSelector({ enderecos, enderecoSelecionado, onSelecionarEndereco,
               key={endereco.id}
               onClick={() => onSelecionarEndereco(endereco.id)}
               style={{
-                cursor: 'pointer', transition: 'all 0.2s', borderRadius: 14,
+                cursor: 'pointer', transition: 'all 0.2s ease', borderRadius: 14,
                 border: `2px solid ${selecionado ? '#EA1D2C' : '#e5e7eb'}`,
-                background: selecionado ? '#FFF0F0' : 'white',
-                padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: 12,
+                background: selecionado ? '#FFF0F0' : '#f9fafb',
+                padding: '14px', display: 'flex', alignItems: 'center', gap: 12,
               }}
             >
               <div style={{
-                width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                background: selecionado ? '#EA1D2C' : '#f3f4f6',
+                width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                background: selecionado ? '#EA1D2C' : '#e5e7eb',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 <MapPin size={16} color={selecionado ? '#fff' : '#9ca3af'} />
               </div>
               <div style={{ flex: 1 }}>
-                <p style={{
-                  fontSize: 14, fontWeight: 700, margin: 0,
-                  color: selecionado ? '#C8101E' : '#1f2937',
-                }}>
+                <p style={{ fontSize: 13, fontWeight: selecionado ? 700 : 600, color: selecionado ? '#C8101E' : '#374151', margin: 0 }}>
                   {endereco.logradouro}
                 </p>
                 {endereco.complemento && (
-                  <p style={{ fontSize: 12, color: selecionado ? '#EA1D2C' : '#9ca3af', margin: '2px 0 0' }}>
-                    {endereco.complemento}
-                  </p>
-                )}
-                {endereco.principal && (
-                  <span style={{
-                    fontSize: 10, fontWeight: 700, color: selecionado ? '#EA1D2C' : '#9ca3af',
-                    textTransform: 'uppercase', letterSpacing: '0.04em',
-                  }}>principal</span>
+                  <p style={{ fontSize: 12, color: selecionado ? '#EA1D2C' : '#6b7280', margin: '2px 0 0' }}>{endereco.complemento}</p>
                 )}
               </div>
-              {selecionado && <CheckCircle2 size={18} color="#EA1D2C" style={{ flexShrink: 0, marginTop: 2 }} />}
+              {selecionado && <CheckCircle2 size={18} color="#EA1D2C" style={{ flexShrink: 0 }} />}
             </div>
           );
         })}
@@ -278,37 +222,33 @@ function AddressSelector({ enderecos, enderecoSelecionado, onSelecionarEndereco,
 // ── Info de retirada ────────────────────────────────────────
 function PickupInfo() {
   return (
-    <div style={{ padding: '0 16px' }}>
+    <div style={{
+      background: 'linear-gradient(135deg, #f9fafb, #f3f4f6)',
+      borderRadius: 14, border: '1px solid #e5e7eb', padding: '16px',
+      display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 20
+    }}>
       <div style={{
-        background: 'linear-gradient(135deg, #fffbeb, #fef3c7)',
-        borderRadius: 16, border: '1px solid #fde68a', padding: 16,
-        display: 'flex', alignItems: 'flex-start', gap: 12,
+        width: 38, height: 38, background: '#fff', borderRadius: 10,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
       }}>
-        <div style={{
-          width: 44, height: 44, background: '#fde68a', borderRadius: '50%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        <Store size={18} color="#1f2937" />
+      </div>
+      <div>
+        <span style={{
+          fontSize: 10, fontWeight: 800, color: '#374151', textTransform: 'uppercase',
+          letterSpacing: '0.06em', background: '#e5e7eb', padding: '3px 8px',
+          borderRadius: 6, display: 'inline-block', marginBottom: 6,
         }}>
-          <Store size={22} color="#92400e" />
-        </div>
-        <div>
-          <span style={{
-            fontSize: 10, fontWeight: 700, color: '#92400e', textTransform: 'uppercase',
-            letterSpacing: '0.06em', background: '#fde68a', padding: '2px 8px',
-            borderRadius: 6, display: 'inline-block', marginBottom: 6,
-          }}>
-            Retirar no local
-          </span>
-          <p style={{ fontSize: 14, fontWeight: 700, color: '#78350f', margin: '0 0 4px' }}>
-            Fique de olho no seu pedido
-          </p>
-          <p style={{ fontSize: 12, color: '#92400e', margin: 0, lineHeight: 1.5 }}>
-            <MapPin size={11} style={{ display: 'inline', verticalAlign: '-1px', marginRight: 3 }} />
-            Dirija-se ao restaurante após a confirmação.
-          </p>
-          <p style={{ fontSize: 12, color: '#92400e', margin: '4px 0 0', fontWeight: 600 }}>
-            ⏱ Aprox. 15–25 min para ficar pronto
-          </p>
-        </div>
+          Retirada Local
+        </span>
+        <p style={{ fontFamily: "'Syne', sans-serif", fontSize: 15, fontWeight: 800, color: '#1f2937', margin: '0 0 2px' }}>
+          Retire direto no restaurante
+        </p>
+        <p style={{ fontSize: 12, color: '#6b7280', margin: 0, lineHeight: 1.5 }}>
+          Após a confirmação, o endereço exato será liberado. <br/>
+          <strong style={{ color: '#374151' }}>⏱ Aprox. 15–25 min de preparo.</strong>
+        </p>
       </div>
     </div>
   );
@@ -317,208 +257,153 @@ function PickupInfo() {
 // ── Resumo de valores ────────────────────────────────────────
 function PriceSummary({ subtotal, taxaFrete, totalPedido, tipoSelecionado, calculandoRota }) {
   return (
-    <div style={{ padding: '0 16px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: '#6b7280' }}>
+        <span>Subtotal</span>
+        <span>{formatCurrency(subtotal)}</span>
+      </div>
+      
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 14, color: '#6b7280' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>Taxa de entrega</span>
+          {calculandoRota && tipoSelecionado === 'entrega' && (
+            <Loader size={12} color="#EA1D2C" style={{ animation: 'spin 1s linear infinite' }} />
+          )}
+        </div>
+        {tipoSelecionado === 'retirada' || taxaFrete === 0 ? (
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#10b981', textTransform: 'uppercase' }}>Grátis</span>
+        ) : (
+          <span style={{ fontWeight: 500, color: calculandoRota ? '#9ca3af' : '#374151' }}>
+            {formatCurrency(taxaFrete)}
+          </span>
+        )}
+      </div>
+
       <div style={{
-        background: 'white', borderRadius: 16, border: '1px solid #e5e7eb',
-        overflow: 'hidden',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        paddingTop: 8, borderTop: '2px solid #e5e7eb', marginTop: 4,
       }}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Receipt size={16} color="#9ca3af" />
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#374151', fontFamily: 'DM Sans, sans-serif' }}>
-            Resumo de valores
-          </span>
-        </div>
-
-        <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 14, color: '#6b7280' }}>Subtotal</span>
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>
-              R$ {subtotal.toFixed(2).replace('.', ',')}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 14, color: '#6b7280' }}>Taxa de entrega</span>
-              {calculandoRota && tipoSelecionado === 'entrega' && (
-                <Loader size={12} color="#EA1D2C" style={{ animation: 'spin 1s linear infinite' }} />
-              )}
-            </div>
-            {tipoSelecionado === 'retirada' || taxaFrete === 0 ? (
-              <span style={{
-                fontSize: 13, fontWeight: 700, color: '#15803d',
-                background: '#dcfce7', padding: '2px 10px', borderRadius: 999,
-              }}>
-                Grátis
-              </span>
-            ) : (
-              <span style={{
-                fontSize: 14, fontWeight: 600,
-                color: calculandoRota ? '#9ca3af' : '#374151',
-                transition: 'color 0.3s',
-              }}>
-                R$ {taxaFrete.toFixed(2).replace('.', ',')}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div style={{
-          background: '#f9fafb', padding: '14px 18px',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          borderTop: '1px solid #f3f4f6',
-        }}>
-          <span style={{ fontSize: 14, color: '#374151', fontWeight: 600 }}>Total</span>
-          <span style={{
-            fontSize: 22, fontWeight: 900, color: '#1f2937',
-            fontFamily: 'Syne, sans-serif',
-          }}>
-            R$ {totalPedido.toFixed(2).replace('.', ',')}
-          </span>
-        </div>
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#1f2937' }}>Total</span>
+        <span style={{ fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 900, color: '#EA1D2C' }}>
+          {formatCurrency(totalPedido)}
+        </span>
       </div>
     </div>
   );
 }
 
-// ── COMPONENTE PRINCIPAL ─────────────────────────────────────
-export function SelecaoEntregaPedido({
-  carrinhoItems,
-  usuarioLogado,
-  restauranteId,
-  onVoltar,
-  onAvancarPagamento,
+// ── Componente Principal ─────────────────────────────────────
+export function SelecaoEntregaPedido({ 
+  carrinhoItems, 
+  usuarioLogado, 
+  restauranteId, 
+  onVoltar, 
+  onAvancarPagamento 
 }) {
   const {
-    tipoSelecionado,
-    enderecos,
-    enderecoSelecionado,
-    loading,
-    salvando,
-    subtotal,
-    taxaFrete,
-    totalPedido,
-    podeAvancar,
-    rotaInfo,
+    loadingInicial,
     calculandoRota,
-    erroRota,
+    tipoSelecionado,
+    enderecoSelecionado,
+    enderecos,
+    taxaFrete,
     tempoEstimado,
-    selecionarTipo,
-    selecionarEndereco,
-    confirmarSelecao,
+    rotaInfo,
+    erroRota,
+    subtotal,
+    totalPedido,
+    setTipoSelecionado,
+    setEnderecoSelecionado,
   } = useTipoEntregaController(carrinhoItems, usuarioLogado, restauranteId);
 
-  if (loading) return <LoadingSpinner />;
+  if (loadingInicial) {
+    return <LoadingSpinner />;
+  }
 
-  const handleConfirmar = async () => {
-    try {
-      const sucesso = await confirmarSelecao();
-      if (sucesso) onAvancarPagamento({ tipoEntrega: tipoSelecionado, taxaFrete, tempoEstimado });
-    } catch (error) {
-      console.error(error);
-    }
+  const handleAvancar = () => {
+    // ✅ LOG para debug
+    console.log('🚚 [SelecaoEntrega] Enviando dados:', {
+      tipoEntrega: tipoSelecionado,
+      taxaFrete: tipoSelecionado === 'retirada' ? 0 : taxaFrete,
+      tempoEstimado,
+      rotaInfo
+    });
+
+    // ✅ CORREÇÃO: Usar 'taxaFrete' ao invés de 'taxa_entrega'
+    onAvancarPagamento({
+      tipoEntrega: tipoSelecionado,
+      taxaFrete: tipoSelecionado === 'retirada' ? 0 : taxaFrete,
+      tempoEstimado,
+      rotaInfo
+    });
   };
 
+  const botaoDesabilitado = calculandoRota || (tipoSelecionado === 'entrega' && !enderecoSelecionado);
+
   return (
-    <>
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
+    <div style={{ animation: 'slideStep 0.3s ease-out' }}>
+      <h3 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18, color: '#1f2937', marginBottom: 20 }}>
+        Opções de Entrega
+      </h3>
 
-      <div className="min-h-screen bg-gray-50 flex flex-col">
-        {/* Header */}
-        <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-lg border-b border-gray-200">
-          <div className="px-4 py-4 flex items-center gap-3">
-            <button
-              onClick={onVoltar}
-              className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5 text-gray-600" />
-            </button>
-            <div className="flex-1">
-              <h1 className="text-lg font-semibold text-gray-800">Finalizar Pedido</h1>
-              <p className="text-sm text-gray-500">Etapa 1 de 2</p>
-            </div>
-          </div>
-        </header>
+      <DeliveryToggle 
+        tipoSelecionado={tipoSelecionado} 
+        onSelecionar={setTipoSelecionado}
+        tempoEstimado={tempoEstimado}
+        calculandoRota={calculandoRota}
+      />
 
-        {/* Conteúdo */}
-        <main style={{ flex: 1, paddingBottom: 100, display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 16 }}>
-          <DeliveryToggle
-            tipoSelecionado={tipoSelecionado}
-            onSelecionar={selecionarTipo}
-            tempoEstimado={tempoEstimado}
+      {tipoSelecionado === 'entrega' ? (
+        <>
+          <AddressSelector 
+            enderecos={enderecos}
+            enderecoSelecionado={enderecoSelecionado}
+            onSelecionarEndereco={setEnderecoSelecionado}
             calculandoRota={calculandoRota}
           />
-
-          {tipoSelecionado === 'entrega' ? (
-            <>
-              <RotaInfoCard
-                rotaInfo={rotaInfo}
-                calculandoRota={calculandoRota}
-                erroRota={erroRota}
-              />
-              <AddressSelector
-                enderecos={enderecos}
-                enderecoSelecionado={enderecoSelecionado}
-                onSelecionarEndereco={selecionarEndereco}
-                calculandoRota={calculandoRota}
-              />
-            </>
-          ) : (
-            <PickupInfo />
-          )}
-
-          <PriceSummary
-            subtotal={subtotal}
-            taxaFrete={taxaFrete}
-            totalPedido={totalPedido}
-            tipoSelecionado={tipoSelecionado}
-            calculandoRota={calculandoRota}
+          <RotaInfoCard 
+            rotaInfo={rotaInfo} 
+            calculandoRota={calculandoRota} 
+            erroRota={erroRota} 
           />
-        </main>
+        </>
+      ) : (
+        <PickupInfo />
+      )}
 
-        {/* Footer fixo */}
-        <footer style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0,
-          background: 'white', borderTop: '1px solid #e5e7eb',
-          padding: '16px', zIndex: 30,
-          boxShadow: '0 -8px 32px rgba(0,0,0,0.06)',
-        }}>
-          <button
-            onClick={handleConfirmar}
-            disabled={!podeAvancar || salvando || calculandoRota}
-            style={{
-              width: '100%', maxWidth: 520, margin: '0 auto', display: 'flex',
-              alignItems: 'center', justifyContent: 'center', gap: 8,
-              padding: '14px', borderRadius: 14, border: 'none', cursor: 'pointer',
-              fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 15,
-              transition: 'all 0.2s',
-              background: (!podeAvancar || calculandoRota)
-                ? '#e5e7eb'
-                : 'linear-gradient(135deg, #EA1D2C, #C8101E)',
-              color: (!podeAvancar || calculandoRota) ? '#9ca3af' : 'white',
-              boxShadow: (podeAvancar && !calculandoRota)
-                ? '0 4px 14px rgba(234,29,44,0.35)'
-                : 'none',
-            }}
-          >
-            {salvando || calculandoRota ? (
-              <>
-                <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                {calculandoRota ? 'Calculando rota...' : 'Salvando...'}
-              </>
-            ) : (
-              <>
-                Ir para Pagamento
-                <ArrowRight size={16} />
-              </>
-            )}
-          </button>
-        </footer>
+      <PriceSummary 
+        subtotal={subtotal}
+        taxaFrete={taxaFrete}
+        totalPedido={totalPedido}
+        tipoSelecionado={tipoSelecionado}
+        calculandoRota={calculandoRota}
+      />
+
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button
+          onClick={onVoltar}
+          style={{
+            padding: '15px', borderRadius: 14, border: 'none', background: '#f3f4f6', color: '#6b7280',
+            fontWeight: 800, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}
+        >
+          Voltar
+        </button>
+        <button
+          onClick={handleAvancar}
+          disabled={botaoDesabilitado}
+          style={{
+            flex: 1, padding: '15px', borderRadius: 14, border: 'none',
+            background: botaoDesabilitado ? '#fca5a5' : 'linear-gradient(135deg, #EA1D2C, #C8101E)',
+            color: '#fff', fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 15,
+            cursor: botaoDesabilitado ? 'not-allowed' : 'pointer',
+            boxShadow: botaoDesabilitado ? 'none' : '0 6px 20px rgba(234,29,44,0.35)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s'
+          }}
+        >
+          {botaoDesabilitado ? 'Aguarde...' : 'Ir para Pagamento'} <ChevronRight size={16} />
+        </button>
       </div>
-    </>
+    </div>
   );
 }
-
-export default SelecaoEntregaPedido;

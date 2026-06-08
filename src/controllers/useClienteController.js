@@ -1,6 +1,6 @@
 // ============================================================
 // CONTROLLER: useClienteController (ATUALIZADO)
-// Inclui taxaFrete dinâmica via OSRM e tempoEstimado real
+// Inclui taxaFrete dinâmica via OSRM, tempoEstimado real e NOTA FISCAL
 // ============================================================
 import { useState, useEffect, useCallback } from 'react';
 import { RestauranteModel } from '../models/restauranteModel';
@@ -10,6 +10,7 @@ import { ItensPedidoModel } from '../models/itensPedidoModel';
 import { ClienteModel } from '../models/clienteModel';
 import { AuthModel } from '../models/authModel';
 import { PaymentService } from '../services/paymentservice';
+import { NotaFiscalService } from '../services/notaFiscalService'; // ✅ NOVO - Envio de nota fiscal
 
 const ENDERECO_PADRAO = 'Rua Augusta, 123 - Consolação, São Paulo - SP';
 
@@ -154,8 +155,9 @@ export function useClienteController() {
   };
 
   // ----------------------------------------------------------
-  // Finalizar pedido
+  // Finalizar pedido - ATUALIZADO COM NOTA FISCAL
   // Agora recebe taxaFrete calculada pelo OSRM via checkout
+  // E envia nota fiscal automaticamente após confirmação
   // ----------------------------------------------------------
   const finalizarPedido = async ({
     tipoEntrega,
@@ -167,7 +169,23 @@ export function useClienteController() {
     dadosCartao = null,
     acao = null,
     pedidoId = null,
+    carrinho: carrinhoParam,
+    usuarioLogado: usuarioParam,
   }) => {
+    // Log para debug
+    console.log('🎮 [Controller] finalizarPedido recebeu:', {
+      tipoEntrega,
+      formaPagamento,
+      total,
+      taxaFrete,
+      tempoEstimado,
+      rotaInfo,
+      acao,
+      pedidoId,
+      hasCarrinho: !!carrinhoParam,
+      hasUsuario: !!usuarioParam
+    });
+
     // Ação de apenas acompanhar (sem criar pedido)
     if (acao === 'acompanhar') {
       setCheckoutAberto(false);
@@ -177,13 +195,19 @@ export function useClienteController() {
       return { sucesso: true, acao: 'acompanhar' };
     }
 
-    const usuario = usuarioLogado;
+    // Usa o carrinho recebido ou o do estado
+    const carrinhoAtual = carrinhoParam || carrinho;
+    const usuario = usuarioParam || usuarioLogado;
 
     if (!usuario) {
-      setCarrinhoPendente([...carrinho]);
+      setCarrinhoPendente([...carrinhoAtual]);
       setPrecisaLogar(true);
       setCarrinhoAberto(false);
       return { sucesso: false, mensagem: 'Usuário não logado' };
+    }
+
+    if (carrinhoAtual.length === 0) {
+      return { sucesso: false, mensagem: 'Carrinho vazio' };
     }
 
     try {
@@ -200,7 +224,7 @@ export function useClienteController() {
 
       // 1. Criar o pedido
       const pedido = await PedidoModel.criar({
-        restaurante_id: carrinho[0].restauranteId,
+        restaurante_id: carrinhoAtual[0].restauranteId,
         cliente_nome: usuario.nome ?? 'Cliente',
         cliente_id: usuario.id,
         total,
@@ -212,14 +236,15 @@ export function useClienteController() {
         pin_entrega: Math.floor(1000 + Math.random() * 9000).toString(),
         email: usuario.email,
         endereco: enderecoEntrega,
-        // Campos extras de rota (se a coluna existir no banco)
         distancia_km: rotaInfo?.distanciaKm ?? null,
         tempo_estimado: tempoTexto,
       });
 
+      console.log('✅ Pedido criado:', pedido);
+
       // 2. Inserir itens do pedido
       await ItensPedidoModel.inserirVarios(
-        carrinho.map((item) => ({
+        carrinhoAtual.map((item) => ({
           pedido_id: pedido.id,
           produto_id: item.id,
           quantidade: item.quantidade,
@@ -228,19 +253,43 @@ export function useClienteController() {
       );
 
       // 3. Processar pagamento
+      console.log('💰 Enviando para PaymentService com taxaFrete:', taxaFrete);
+      
       const resultadoPagamento = await PaymentService.processarPagamento({
         pedidoId: pedido.id,
         formaPagamento,
         valor: total,
         dadosCartao,
         usuarioLogado: usuario,
-        carrinho,
+        carrinho: carrinhoAtual,
         tipoEntrega,
+        taxaFrete: tipoEntrega === 'Retirada' ? 0 : taxaFrete,
       });
 
-      // 4. Atualizar status do pedido
+      console.log('🎮 Resultado do pagamento:', resultadoPagamento);
+
+      // 4. Atualizar status do pedido e enviar nota fiscal
       if (resultadoPagamento.sucesso) {
         await PedidoModel.atualizarStatus(pedido.id, 'Confirmado');
+        
+        // ── ✅ ENVIO DE NOTA FISCAL (fire-and-forget, não bloqueia o checkout) ──
+        if (usuario.email) {
+          console.log('📧 Enviando nota fiscal para:', usuario.email);
+          NotaFiscalService.enviarAposConfirmacao({
+            id: pedido.id,
+            email: usuario.email,
+            status: 'Confirmado',
+          }).catch(err => {
+            console.error('❌ Erro ao enviar nota fiscal (não crítico):', err);
+          });
+        } else {
+          console.warn('⚠️ Usuário sem email cadastrado, nota fiscal não enviada');
+        }
+        // ────────────────────────────────────────────────────────────────────────
+        
+        // Limpa o carrinho após pedido bem sucedido
+        setCarrinho([]);
+        setCheckoutAberto(false);
 
         return {
           sucesso: true,
@@ -263,7 +312,7 @@ export function useClienteController() {
         };
       }
     } catch (error) {
-      console.error('Erro ao finalizar pedido:', error);
+      console.error('❌ Erro ao finalizar pedido:', error);
       return {
         sucesso: false,
         mensagem: `Erro ao processar pedido: ${error.message}`,

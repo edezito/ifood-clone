@@ -4,8 +4,9 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  Store, ShoppingBag, Package, MapPin, Edit2, Trash2,
-  CheckCircle, Clock, X, PlusCircle, AlertCircle, LogOut, Mail, BarChart3
+  Store, Star, ShoppingBag, Package, MapPin, Edit2, Trash2,
+  CheckCircle, Clock, X, PlusCircle, AlertCircle, LogOut, Mail, BarChart3,
+  FileText  // ✅ NOVO - Ícone para nota fiscal
 } from 'lucide-react';
 import NotificacaoService from '../services/Notificacaoservice';
 import { StatusModel } from '../models/statusModel';
@@ -96,6 +97,7 @@ function AdminDashboard({ onLogout }) {
   const [editandoProdId, setEditandoProdId] = useState(null);
   const [buscandoCoordenadas, setBuscandoCoordenadas] = useState(false);
   const [enviandoPin, setEnviandoPin] = useState(null);
+  const [enviandoNota, setEnviandoNota] = useState(null); // ✅ NOVO - Estado para reenvio de nota fiscal
 
   useEffect(() => {
     fetchDados();
@@ -335,6 +337,22 @@ function AdminDashboard({ onLogout }) {
     }
   };
 
+  // ✅ NOVA FUNÇÃO - Reenvio de nota fiscal
+  const handleReenviarNota = async (ped) => {
+    setEnviandoNota(ped.id);
+    await NotificacaoService.reenviarNotaFiscal(
+      ped,
+      (msg) => { 
+        mostrarMensagem(msg, 'success'); 
+        setEnviandoNota(null); 
+      },
+      (msg) => { 
+        mostrarMensagem(msg, 'error');   
+        setEnviandoNota(null); 
+      }
+    );
+  };
+
   const getStatusBadge = (status) => {
     const styles = {
       'Aguardando': 'bg-amber-100 text-amber-800 border-amber-200',
@@ -534,6 +552,7 @@ function AdminDashboard({ onLogout }) {
                       </div>
                     </div>
 
+                    {/* ✅ BLOCOS DE BOTÕES ATUALIZADO COM NOTA FISCAL */}
                     <div className="flex flex-wrap gap-2">
                       {statusNormalizado === 'Aguardando' && (
                         <button onClick={() => handleAtualizarStatus(ped.id, 'Em Preparação')}
@@ -566,6 +585,21 @@ function AdminDashboard({ onLogout }) {
                           )}
                         </>
                       )}
+
+                      {/* ✅ BOTÃO NOTA FISCAL (exibido para todos os pedidos com email) */}
+                      {ped.email && (
+                        <button
+                          onClick={() => handleReenviarNota(ped)}
+                          disabled={enviandoNota === ped.id}
+                          className="flex items-center gap-1.5 bg-white border-2 border-green-200 text-green-700 hover:bg-green-50 font-bold py-2 px-4 rounded-xl active:scale-95 transition-all disabled:opacity-50"
+                          title="Enviar nota fiscal por e-mail"
+                        >
+                          <FileText size={15} />
+                          {enviandoNota === ped.id ? 'Enviando...' : 'Nota Fiscal'}
+                        </button>
+                      )}
+                      {/* ───────────────────────────────────────────────────────────── */}
+
                       {(statusNormalizado !== 'Entregue' && statusNormalizado !== 'Cancelado') && (
                         <button onClick={() => { if (window.confirm('Cancelar este pedido?')) handleAtualizarStatus(ped.id, 'Cancelado'); }}
                           className="flex-1 sm:flex-none bg-white border-2 border-red-100 text-red-600 hover:bg-red-50 font-bold py-2 px-6 rounded-xl active:scale-95 transition-all">
@@ -573,6 +607,7 @@ function AdminDashboard({ onLogout }) {
                         </button>
                       )}
                     </div>
+                    {/* FIM DOS BOTÕES */}
                   </div>
                 );
               })
@@ -742,113 +777,142 @@ function AdminDashboard({ onLogout }) {
         {/* ABA: GERENCIAR LOJAS */}
         {abaAtiva === 'gerenciar' && (
           <div className="space-y-6">
-            <div className="flex justify-end">
-              <button
-                onClick={() => { cancelarEdicaoRest(); setShowFormulario(true); }}
-                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold transition-colors"
-              >
-                <PlusCircle size={18} /> Nova Loja
-              </button>
-            </div>
+            {!showFormulario && !editandoRestId && (
+              <div className="flex justify-end">
+                <button
+                  onClick={() => { cancelarEdicaoRest(); setShowFormulario(true); }}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold transition-colors"
+                >
+                  <PlusCircle size={18} /> Nova Loja
+                </button>
+              </div>
+            )}
 
             {(editandoRestId || showFormulario) && (
-              <div className="bg-white rounded-2xl p-6 border border-amber-400 shadow-lg">
+              <div className="bg-white rounded-2xl p-6 border border-red-400 shadow-lg mb-6">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
-                    <Store size={20} className="text-amber-500" />
+                    <Store size={20} className="text-red-600" />
                     {editandoRestId ? 'Editando Loja' : 'Nova Loja'}
                   </h2>
                   <button onClick={() => { cancelarEdicaoRest(); setShowFormulario(false); }} className="p-1 hover:bg-gray-100 rounded-full text-gray-500">
                     <X size={18} />
                   </button>
                 </div>
-
+                
                 <form onSubmit={handleSalvarRestaurante} className="space-y-3">
-                  <input
-                    type="text" value={nomeRest} onChange={(e) => setNomeRest(e.target.value)}
-                    placeholder="Nome da Loja" required
-                    className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500"
+                  <input 
+                    type="text" 
+                    value={nomeRest} 
+                    onChange={(e) => setNomeRest(e.target.value)} 
+                    placeholder="Nome da loja" 
+                    required 
+                    className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" 
                   />
-                  <input
-                    type="text" value={cnpj} onChange={(e) => setCnpj(e.target.value)}
-                    placeholder="CNPJ" required
-                    className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500"
+                  <input 
+                    type="text" 
+                    value={cnpj} 
+                    onChange={(e) => setCnpj(e.target.value)} 
+                    placeholder="CNPJ" 
+                    required 
+                    className="w-full bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" 
                   />
+                  
                   <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <MapPin size={18} className="absolute left-3 top-3.5 text-gray-400" />
-                      <input
-                        type="text" value={endereco} onChange={(e) => setEndereco(e.target.value)}
-                        placeholder="Endereço completo (Rua, número, bairro, cidade)" required
-                        className="w-full bg-gray-50 pl-10 pr-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500"
-                      />
-                    </div>
-                    <button type="button" onClick={buscarCoordenadas} disabled={buscandoCoordenadas}
-                      className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-colors whitespace-nowrap disabled:opacity-50">
-                      {buscandoCoordenadas ? 'Buscando...' : 'Buscar Mapa'}
+                    <input 
+                      type="text" 
+                      value={endereco} 
+                      onChange={(e) => setEndereco(e.target.value)} 
+                      placeholder="Endereço completo (Rua, Número, Bairro, Cidade - UF)" 
+                      required 
+                      className="flex-1 bg-gray-50 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-red-100 focus:border-red-500" 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={buscarCoordenadas} 
+                      disabled={buscandoCoordenadas} 
+                      className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-3 rounded-xl font-bold transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      <MapPin size={18} />
+                      {buscandoCoordenadas ? 'Buscando...' : 'Buscar'}
                     </button>
                   </div>
+
+                  <div className="flex gap-2">
+                    <input type="text" value={latitude} readOnly placeholder="Latitude" className="flex-1 bg-gray-100 px-4 py-3 rounded-xl border border-gray-200 text-gray-500" />
+                    <input type="text" value={longitude} readOnly placeholder="Longitude" className="flex-1 bg-gray-100 px-4 py-3 rounded-xl border border-gray-200 text-gray-500" />
+                  </div>
+
                   {(latitude && longitude) && (
-                    <div className="bg-green-50 p-3 rounded-xl text-sm text-green-700">
-                      📍 Coordenadas: {latitude}, {longitude}
+                    <div className="mt-4">
+                      <MapaLocalizacao latitude={latitude} longitude={longitude} nome={nomeRest || 'Nova Loja'} endereco={endereco} />
                     </div>
                   )}
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Visualização no mapa:</label>
-                    <MapaLocalizacao latitude={latitude} longitude={longitude} endereco={endereco} nome={nomeRest || 'Nova Loja'} />
-                  </div>
-                  <button type="submit" className={`w-full text-white font-bold py-3 rounded-xl transition-all active:scale-95 ${
-                    editandoRestId ? 'bg-amber-500 hover:bg-amber-600' : 'bg-gray-900 hover:bg-black'
-                  }`}>
-                    {editandoRestId ? 'Atualizar Loja' : 'Salvar Loja'}
+
+                  <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition-all active:scale-95 mt-4">
+                    {editandoRestId ? 'Atualizar Loja' : 'Cadastrar Loja'}
                   </button>
                 </form>
               </div>
             )}
 
-            <div className="space-y-3">
-              <h2 className="text-lg font-black text-gray-800">Minhas Lojas</h2>
-              {restaurantes.length === 0 ? (
-                <div className="bg-white rounded-2xl p-10 text-center text-gray-400 border border-gray-100">
-                  <Store size={48} className="mx-auto mb-4 opacity-50" />
-                  <p>Nenhuma loja cadastrada.</p>
-                </div>
-              ) : (
-                restaurantes.map(rest => (
-                  <div key={rest.id} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow">
+            {/* Lista de Restaurantes (Gerenciar) */}
+            {restaurantes.length === 0 ? (
+              <div className="bg-white rounded-2xl p-10 text-center text-gray-400">
+                <Store size={48} className="mx-auto mb-4 opacity-50" />
+                <p>Nenhuma loja cadastrada.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {restaurantes.map(rest => (
+                  <div key={rest.id} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                     <div className="flex justify-between items-start mb-4">
-                      <div className="flex-1">
-                        <h3 className="font-black text-lg text-gray-800">{rest.nome}</h3>
+                      <div>
+                        {/* Score / Avaliações */}
+                        <div className="flex items-center gap-3">
+                          <h3 className="font-black text-xl text-gray-800">{rest.nome}</h3>
+                          
+                          <div 
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                              rest.score >= 4.5 ? 'bg-green-100 text-green-700' :
+                              rest.score >= 3.5 ? 'bg-yellow-100 text-yellow-700' :
+                              rest.score > 0 ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}
+                            title={rest.total_avaliacoes ? `${rest.total_avaliacoes} avaliações` : 'Sem avaliações'}
+                          >
+                            <Star size={12} className={rest.score > 0 ? "fill-current" : ""} />
+                            {rest.score ? Number(rest.score).toFixed(1) : 'Novo'}
+                          </div>
+                        </div>
+                        
+                        <p className="text-sm text-gray-500 mt-1">CNPJ: {rest.cnpj}</p>
                         <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
                           <MapPin size={14} /> {rest.endereco}
                         </p>
-                        <p className="text-xs text-gray-400 mt-1">CNPJ: {rest.cnpj}</p>
-                        {rest.latitude && (
-                          <p className="text-xs text-gray-400 mt-1">📍 {rest.latitude}, {rest.longitude}</p>
-                        )}
                       </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => prepararEdicaoRestaurante(rest)}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-bold text-sm transition-colors">
-                          <Edit2 size={16} /> Editar
+                      <div className="flex gap-1">
+                        <button 
+                          onClick={() => prepararEdicaoRestaurante(rest)} 
+                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Editar Loja"
+                        >
+                          <Edit2 size={18} />
                         </button>
-                        <button onClick={() => handleExcluirRestaurante(rest.id, rest.nome)}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-bold text-sm transition-colors">
-                          <Trash2 size={16} /> Excluir
+                        <button 
+                          onClick={() => handleExcluirRestaurante(rest.id, rest.nome)} 
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Excluir Loja"
+                        >
+                          <Trash2 size={18} />
                         </button>
                       </div>
                     </div>
-                    <div className="mt-3">
-                      <MapaLocalizacao latitude={rest.latitude} longitude={rest.longitude} endereco={rest.endereco} nome={rest.nome} />
-                    </div>
-                    <div className="mt-3 pt-3 border-t border-gray-50 flex gap-4 text-xs">
-                      <span className="text-gray-500">📦 {produtos.filter(p => p.restaurante_id === rest.id).length} produtos</span>
-                      <span className="text-gray-500">🛒 {pedidos.filter(p => p.restaurante_id === rest.id && p.status !== 'Entregue').length} pedidos ativos</span>
-                    </div>
+                    <MapaLocalizacao latitude={rest.latitude} longitude={rest.longitude} nome={rest.nome} endereco={rest.endereco} />
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>
